@@ -1,5 +1,5 @@
 """
-Small helpers: parsing, aliases, bucket calc, file finding, Excel engine choice.
+Helpers: parsing, aliases, bucket calc, file finding, slugging.
 """
 import re
 import unicodedata
@@ -8,9 +8,20 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+# Try the faster, well-tested library first
+try:
+    from slugify import slugify as _ext_slugify  # pip install python-slugify
+except Exception:
+    _ext_slugify = None
+
+_re_space = re.compile(r"\s+")
+_re_bad = re.compile(r"[^A-Za-z0-9. -]+")
+_re_quotes = re.compile(r"[’'`]")
+
 
 def clean_str(x):
     if x is None: return ""
+    # handles pandas NaN too
     if isinstance(x, float) and pd.isna(x): return ""
     return str(x).strip()
 
@@ -33,16 +44,23 @@ def fmt_money(x):
 
 
 def slugify(name: str) -> str:
-    s = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode()
+    """Prefer python-slugify; fallback to a conservative ASCII sanitizer."""
+    s = str(name or "")
+    if _ext_slugify:
+        out = _ext_slugify(s, lowercase=False, separator=" ", max_length=120)
+        out = out.replace("/", "-").replace("\\", "-")
+        return out.strip() or "Unknown"
+    # Fallback (ASCII only)
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
     s = s.replace("&", " and ")
-    s = re.sub(r"[’'`]", "", s)
+    s = _re_quotes.sub("", s)
     s = s.replace("/", "-").replace("\\", "-")
-    s = re.sub(r"[^A-Za-z0-9. -]+", " ", s)  # allow dot, dash, space
-    s = re.sub(r"\s+", " ", s).strip()
+    s = _re_bad.sub(" ", s)
+    s = _re_space.sub(" ", s).strip()
     return s[:120] or "Unknown"
 
 
-# Column aliases tolerant of different QB exports
+# Column aliases...
 ALIASES = {
     "name": ["Name", "Customer", "Customer Name", "Customer_Name"],
     "type": ["Type", "Txn Type", "Txn_Type", "Doc Type", "Doc_Type"],
