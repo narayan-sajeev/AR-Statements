@@ -1,0 +1,105 @@
+"""
+Utility helpers kept small and boring on purpose.
+"""
+import re
+import unicodedata
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+
+def clean_str(x):
+    """Return a trimmed string; blank if NaN/None."""
+    if x is None: return ""
+    if isinstance(x, float) and pd.isna(x): return ""
+    return str(x).strip()
+
+
+def parse_money(x):
+    """Parse money-like strings to float; safe for NaN and commas/dollar signs."""
+    if pd.isna(x): return np.nan
+    if isinstance(x, (int, float)): return float(x)
+    s = str(x).strip().replace(",", "").replace("$", "")
+    try:
+        return float(s)
+    except:
+        return np.nan
+
+
+def fmt_money(x):
+    """Consistent USD formatting."""
+    try:
+        return "${:,.2f}".format(float(x))
+    except:
+        return x
+
+
+def slugify(name: str) -> str:
+    """Human-friendly folder/file slugs (no weird underscores)."""
+    s = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode()
+    s = s.replace("&", " and ")
+    s = re.sub(r"[’'`]", "", s)
+    s = s.replace("/", "-").replace("\\", "-")
+    s = re.sub(r"[^A-Za-z0-9. -]+", " ", s)  # allow dot/dash/space
+    s = re.sub(r"\s+", " ", s).strip()
+    return s[:120] or "Unknown"
+
+
+# Aliases let us tolerate different header spellings from various QB exports/cleanups
+ALIASES = {
+    "name": ["Name", "Customer", "Customer Name", "Customer_Name"],
+    "type": ["Type", "Txn Type", "Txn_Type", "Doc Type", "Doc_Type"],
+    "date": ["Date", "Txn Date", "Txn_Date", "Invoice Date", "Invoice_Date"],
+    "num": ["Num", "No", "Doc Num", "Doc_Num", "Invoice", "Invoice Number", "Invoice_Number"],
+    "po": ["P. O. #", "PO", "P.O.#", "PO Number", "PO_Number", "P_O_Number"],
+    "terms": ["Terms"],
+    "due_date": ["Due Date", "Due_Date", "Due", "DueDt", "Due_Dt"],
+    "open_balance": ["Open Balance", "Open_Balance", "Balance", "Open Amount", "Open_Amount", "Amt Open", "Amt_Open"],
+    "class": ["Class", "Dept", "Department"],
+    "aging": ["Aging", "Aging Bucket", "Aging_Bucket", "Aging_Bucket_Calc"],
+    "days_past_due": ["Days Past Due", "Days_Past_Due", "Days Overdue", "Days_Overdue"],
+}
+
+
+def pick(df: pd.DataFrame, keys: list[str]) -> str | None:
+    """Return the first column present from a list of candidate names."""
+    for k in keys:
+        if k in df.columns: return k
+    return None
+
+
+def excel_engine_or_csv_fallback() -> str | None:
+    """Pick an Excel writer engine if available; else fall back to CSV."""
+    for cand in ("xlsxwriter", "openpyxl"):
+        try:
+            __import__(cand)
+            return cand
+        except ImportError:
+            pass
+    return None
+
+
+def autodetect_csv(search_dirs: list[Path]) -> str | None:
+    """Find the most likely AR CSV in a set of directories."""
+    cands = []
+    for d in search_dirs:
+        if not d.exists(): continue
+        cands += [p for p in d.glob("*.csv") if not p.name.lower().startswith(("send_statements", "aging_summary"))]
+    if not cands: return None
+    # score by name hints + mtime
+    cands.sort(
+        key=lambda p: (sum(s in p.name.lower() for s in ["aging", "ar", "receivable", "qb", "ar_detail", "quickbooks"]),
+                       p.stat().st_mtime), reverse=True)
+    return str(cands[0])
+
+
+def bucketize(days: int) -> str:
+    """Compute canonical bucket from integer days past due (<=0 => Current)."""
+    if pd.isna(days): return "Current"
+    d = int(days)
+    if d <= 0: return "Current"
+    if d <= 30: return "1-30"
+    if d <= 60: return "31-60"
+    if d <= 90: return "61-90"
+    return "90+"
