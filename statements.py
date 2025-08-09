@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-NETC AR Statement Builder — persistent output tree (HTML only, no PDFs).
+NETC AR Statement Builder — single-file entry point (formerly pipeline.py).
+Run with: python statements.py
 
-- Root folder is constant: ./Customer_Statements
+- Root folder is constant: Customer_Statements
 - One subfolder per customer (slug)
 - Keep historical statements per day per customer:
-    <Customer>/<slug>_statement_<YYYY-MM-DD>.html
+    <Customer>/<slug>_YYYYMMDD.html
   Overwrite same-day; keep different days.
 - email_template.txt is always the latest only (overwrite)
 - Top-level index.html overwritten each run
@@ -27,48 +28,7 @@ from utils import (
 )
 
 
-# ---------- Excel helpers ----------
-def _apply_formats_xlsxwriter(writer, sheet_name, df):
-    wb = writer.book
-    ws = writer.sheets[sheet_name]
-    money = wb.add_format({'num_format': '$#,##0.00'})
-    ints = wb.add_format({'num_format': '0'})
-    datef = wb.add_format({'num_format': 'yyyy-mm-dd'})
-    # simple adaptive widths
-    for i, col in enumerate(df.columns):
-        maxlen = max([len(str(col))] + [len(str(v)) for v in df[col].astype(str).values[:200]])
-        ws.set_column(i, i, min(maxlen + 2, 40))
-    for i, col in enumerate(df.columns):
-        nm = str(col).lower()
-        if "amount" in nm or "balance" in nm or "total" in nm:
-            ws.set_column(i, i, None, money)
-        elif "days" in nm:
-            ws.set_column(i, i, None, ints)
-        elif "date" in nm or nm in ("due", "due_dt"):
-            ws.set_column(i, i, None, datef)
-
-
-def _apply_formats_openpyxl(writer, sheet_name):
-    from openpyxl.styles import numbers
-    ws = writer.sheets[sheet_name]
-    header = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))]
-    for col_idx, name in enumerate(header, start=1):
-        nm = (str(name) if name is not None else "").lower()
-        if "amount" in nm or "balance" in nm or "total" in nm:
-            fmt = numbers.FORMAT_CURRENCY_USD_SIMPLE
-        elif "days" in nm:
-            fmt = "0"
-        elif "date" in nm or nm in ("due", "due_dt"):
-            fmt = numbers.FORMAT_DATE_YYYYMMDD2
-        else:
-            fmt = None
-        if fmt:
-            for cell in ws.iter_cols(min_col=col_idx, max_col=col_idx, min_row=2):
-                for c in cell:
-                    c.number_format = fmt
-
-
-# ---------- Helpers ----------
+# ---------- Helpers moved out of the giant script ----------
 def _normalize_bucket(raw_aging, dpd):
     """Return canonical bucket label.
     - If raw_aging is a known label, map it.
@@ -101,23 +61,19 @@ def _avg_int(series: pd.Series) -> int:
     return int(m) if pd.notna(m) else 0
 
 
-# ---------- Main build ----------
-def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
-              logo_override: str | None = None) -> None:
-    as_of = pd.to_datetime(as_of_str).date() if as_of_str else date.today()
-    company = Company()
-    if logo_override:
-        company.logo_src = logo_override
+# ---------- Main build (no arguments; fully self-contained) ----------
+def build_all() -> None:
+    as_of = date.today()
+    company = Company()  # branding from config.py
 
     # Persistent root: fixed folder
-    base_root = (outdir if outdir else Path("./Customer_Statements")).resolve()
+    base_root = Path("Customer_Statements").resolve()
     base_root.mkdir(parents=True, exist_ok=True)
 
-    # Input CSV (auto-detect allowed)
+    # Input CSV (auto-detect only)
+    input_csv = autodetect_csv([Path.cwd(), Path.cwd() / "input", Path.home() / "Downloads"])
     if not input_csv:
-        input_csv = autodetect_csv([Path.cwd(), Path.cwd() / "input", Path.home() / "Downloads"])
-    if not input_csv:
-        raise SystemExit("No CSV found. Provide --input or place a CSV in ./, ./input, or ~/Downloads.")
+        raise SystemExit("No CSV found.")
     input_csv = Path(input_csv)
 
     # Load raw
@@ -177,24 +133,24 @@ def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
     keep = pd.Series(True, index=df0.index)
 
     m = df0["customer"].str.len() > 0
-    reasons.append(("blank_customer", ~m));
+    reasons.append(("blank_customer", ~m))
     keep &= m
 
     m = df0["type"].str.len() > 0
-    reasons.append(("blank_type", ~m));
+    reasons.append(("blank_type", ~m))
     keep &= m
 
     type_norm = df0["type"].str.lower()
     m = type_norm.str.contains(r"(?:invoice|credit)", regex=True, na=False)
-    reasons.append(("non_invoice_or_credit", ~m));
+    reasons.append(("non_invoice_or_credit", ~m))
     keep &= m
 
     m = (df0["num"].str.len() > 0) | df0["invoice_date"].notna() | df0["due_date"].notna()
-    reasons.append(("no_num_and_no_dates", ~m));
+    reasons.append(("no_num_and_no_dates", ~m))
     keep &= m
 
     m = df0["amount"].notna() & (df0["amount"].abs() > 1e-6)
-    reasons.append(("zero_or_nan_amount", ~m));
+    reasons.append(("zero_or_nan_amount", ~m))
     keep &= m
 
     dropped = int((~keep).sum())
@@ -271,19 +227,13 @@ def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
             })
 
         # Statement file: keep history by day; overwrite if same day
-        # Take first 3 words of customer name
+        # Take first 3 words of customer name, slugify, date without dashes
         cust_words = cust.split()[:3]
         cust_first3 = " ".join(cust_words)
 
-        # Slugify
         cust_slug = slugify(cust_first3)
-
-        # Format date without dashes
         date_str = as_of.strftime("%Y%m%d")
-
-        # Build filename without "statement"
         statement_name = f"{cust_slug}_{date_str}.html"
-
         statement_path = cust_dir / statement_name
 
         html = t_statement.render(
@@ -329,3 +279,7 @@ def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
 
     print(f"✅ Built {len(summaries)} statements into {base_root}")
     print(f"   Open: {(base_root / 'index.html')}")
+
+
+if __name__ == "__main__":
+    build_all()
