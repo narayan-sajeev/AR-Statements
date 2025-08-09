@@ -171,7 +171,6 @@ def build_all() -> None:
     # Jinja env
     env = Environment(loader=BaseLoader(), autoescape=select_autoescape())
     t_statement = env.from_string(STATEMENT_HTML)
-    t_index = env.from_string(INDEX_HTML)
     t_email = env.from_string(EMAIL_TXT)
 
     # Per-customer generation
