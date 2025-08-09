@@ -196,7 +196,7 @@ STATEMENT_HTML = """<!doctype html>
 </html>
 """
 
-EMAIL_TXT = """Subject: Statement as of {{ as_of }} - {{ customer }} - {{ company.name }}
+EMAIL_TXT = """Subject: {{ as_of }} Statement - {{ customer }} - {{ company.name }}
 
 Hi {{ customer }},
 
