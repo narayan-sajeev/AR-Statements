@@ -2,17 +2,11 @@
 Helpers: parsing, aliases, bucket calc, file finding, slugging.
 """
 import re
-import unicodedata
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
-# Try the faster, well-tested library first
-try:
-    from slugify import slugify as _ext_slugify  # pip install python-slugify
-except Exception:
-    _ext_slugify = None
+from slugify import slugify
 
 _re_space = re.compile(r"\s+")
 _re_bad = re.compile(r"[^A-Za-z0-9. -]+")
@@ -45,18 +39,9 @@ def fmt_money(x):
 
 def clean_folder_name(name: str) -> str:
     s = str(name or "")
-    if _ext_slugify:
-        out = _ext_slugify(s, lowercase=False, separator=" ", max_length=120)
-        out = out.replace("/", "-").replace("\\", "-")
-        return out.strip() or "Unknown"
-    # Fallback (ASCII only)
-    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
-    s = s.replace("&", " and ")
-    s = _re_quotes.sub("", s)
-    s = s.replace("/", "-").replace("\\", "-")
-    s = _re_bad.sub(" ", s)
-    s = _re_space.sub(" ", s).strip()
-    return s[:120] or "Unknown"
+    out = slugify(s, lowercase=False, separator=" ", max_length=120)
+    out = out.replace("/", "-").replace("\\", "-")
+    return out.strip() or "Unknown"
 
 
 # Column aliases...
