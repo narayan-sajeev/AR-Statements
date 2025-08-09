@@ -1,40 +1,35 @@
 """
-ETL + render pipeline:
-- Load CSV (aliases), normalize values (no 'nan' strings), compute buckets/DPD
-- Per-customer statements + email drafts
-- index.html with search + grand total (also embedded as data attribute)
-- Aging_Summary.xlsx: Detail (Raw), Detail (Clean), By Customer (with formats)
-- Output zipped bundle
+ETL + render pipeline (fixed for raw QB export quirks):
+- Strictly filter valid detail rows (no blank/total headers)
+- Normalize aging bucket even when provided as a number
+- Per-customer statements, index, Excel, zip
+- Writes _rejected_rows.csv for audit
 """
-import os
-import textwrap
-import zipfile
 from datetime import date
 from pathlib import Path
+import os, zipfile, textwrap
 
+import numpy as np
 import pandas as pd
 from jinja2 import Environment, BaseLoader, select_autoescape
 
 from config import Company, Settings, BUCKET_CANON, BUCKET_MAP
-from templates import INDEX_HTML, STATEMENT_HTML, EMAIL_TXT
 from utils import (
     ALIASES, pick, clean_str, parse_money, fmt_money, slugify,
     excel_engine_or_csv_fallback, autodetect_csv, bucketize,
 )
+from templates import INDEX_HTML, STATEMENT_HTML, EMAIL_TXT
 
 
-# --- Excel helpers (formats) -------------------------------------------------
 def _apply_formats_xlsxwriter(writer, sheet_name, df):
     wb = writer.book
     ws = writer.sheets[sheet_name]
     money = wb.add_format({'num_format': '$#,##0.00'})
     ints = wb.add_format({'num_format': '0'})
     datef = wb.add_format({'num_format': 'yyyy-mm-dd'})
-    # widths
     for i, col in enumerate(df.columns):
         maxlen = max([len(str(col))] + [len(str(v)) for v in df[col].astype(str).values[:200]])
         ws.set_column(i, i, min(maxlen + 2, 40))
-    # basic per-column format
     for i, col in enumerate(df.columns):
         nm = str(col).lower()
         if "amount" in nm or "balance" in nm or "total" in nm:
@@ -65,68 +60,140 @@ def _apply_formats_openpyxl(writer, sheet_name):
                     c.number_format = fmt
 
 
-# --- Build all ---------------------------------------------------------------
+def _normalize_bucket(raw_aging, dpd):
+    """Return canonical bucket label.
+    - If raw_aging is label (1-30, Over 90, etc.), map to canonical.
+    - If raw_aging is numeric (e.g., '72'), bucketize by value.
+    - Else, bucketize by computed DPD.
+    """
+    s = clean_str(raw_aging)
+    # direct label
+    if s in BUCKET_CANON or s in BUCKET_MAP:
+        s2 = BUCKET_MAP.get(s, s)
+        if s2 in BUCKET_CANON:
+            return s2
+    # numeric-like?
+    try:
+        val = float(s)
+        return bucketize(int(val))
+    except Exception:
+        pass
+    # fallback to DPD
+    if pd.notna(dpd):
+        try:
+            return bucketize(int(dpd))
+        except Exception:
+            return "Current"
+    return "Current"
+
+
 def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
               logo_override: str | None = None) -> None:
-    # Settings / branding
     as_of = pd.to_datetime(as_of_str).date() if as_of_str else date.today()
     company = Company()
     if logo_override:
         company.logo_src = logo_override
     settings = Settings(as_of=as_of, output_root=outdir)
 
-    # Input CSV
+    # Input CSV (raw QB export allowed)
     if not input_csv:
         input_csv = autodetect_csv([Path.cwd(), Path.cwd() / "input", Path.home() / "Downloads"])
     if not input_csv:
-        raise SystemExit("No CSV found. Provide --input or place a CSV next to the tool / in ./input / in ~/Downloads.")
+        raise SystemExit("No CSV found. Provide --input or place a CSV in ./, ./input, or ~/Downloads.")
     input_csv = Path(input_csv)
 
-    # Load raw
-    raw = pd.read_csv(input_csv, dtype=str, encoding="utf-8-sig", on_bad_lines="skip")
-    raw.columns = [c.strip() for c in raw.columns]
-    cols = {k: pick(raw, v) for k, v in ALIASES.items()}
+    # Load raw exactly-as-is (strings), strip headers
+    raw0 = pd.read_csv(input_csv, dtype=str, encoding="utf-8-sig", on_bad_lines="skip")
+    raw0.columns = [c.strip() for c in raw0.columns]
+
+    cols = {k: pick(raw0, v) for k, v in ALIASES.items()}
     for critical in ("name", "type", "open_balance"):
         if not cols[critical]:
-            raise SystemExit(f"Missing required column for '{critical}'. Found columns: {list(raw.columns)}")
+            raise SystemExit(f"Missing required column for '{critical}'. Found columns: {list(raw0.columns)}")
 
-    # Normalize
-    df = raw.copy()
-    df["customer"] = df[cols["name"]].map(clean_str)
-    df["type"] = df[cols["type"]].map(clean_str)
-    df["num"] = df[cols["num"]].map(clean_str) if cols["num"] else ""
-    df["po"] = df[cols["po"]].map(clean_str) if cols["po"] else ""
-    df["terms"] = df[cols["terms"]].map(clean_str) if cols["terms"] else ""
-    df["invoice_date"] = pd.to_datetime(df[cols["date"]], errors="coerce") if cols["date"] else pd.NaT
-    df["due_date"] = pd.to_datetime(df[cols["due_date"]], errors="coerce") if cols["due_date"] else pd.NaT
-    df["amount"] = df[cols["open_balance"]].map(parse_money).astype(float)
+    # Normalize to a working dataframe
+    df0 = raw0.copy()
+    df0["customer"] = df0[cols["name"]].map(clean_str)
+    df0["type"] = df0[cols["type"]].map(clean_str)
+    df0["num"] = df0[cols["num"]].map(clean_str) if cols["num"] else ""
+    df0["po"] = df0[cols["po"]].map(clean_str) if cols["po"] else ""
+    df0["terms"] = df0[cols["terms"]].map(clean_str) if cols["terms"] else ""
+    df0["invoice_date"] = pd.to_datetime(df0[cols["date"]], errors="coerce") if cols["date"] else pd.NaT
+    df0["due_date"] = pd.to_datetime(df0[cols["due_date"]], errors="coerce") if cols["due_date"] else pd.NaT
+    df0["amount"] = df0[cols["open_balance"]].map(parse_money).astype(float)
 
-    # DPD (prefer supplied, else compute)
-    if cols["days_past_due"]:
-        dpd = pd.to_numeric(df[cols["days_past_due"]], errors="coerce")
-        df["days_past_due"] = dpd.where(dpd.notna(), (pd.Timestamp(as_of) - df["due_date"]).dt.days)
+    # Compute DPD from due_date when possible
+    dpd_supplied = pd.to_numeric(df0[cols["days_past_due"]], errors="coerce") if cols.get(
+        "days_past_due") else pd.Series(index=df0.index, dtype="float64")
+    df0["days_past_due"] = dpd_supplied
+    need_dpd = df0["days_past_due"].isna() & df0["due_date"].notna()
+    df0.loc[need_dpd, "days_past_due"] = (pd.Timestamp(as_of) - df0.loc[need_dpd, "due_date"]).dt.days
+    df0["days_past_due"] = pd.to_numeric(df0["days_past_due"], errors="coerce").fillna(0).astype("int64")
+    df0["invoice_age_days"] = (pd.Timestamp(as_of) - df0["invoice_date"]).dt.days
+    df0["invoice_age_days"] = pd.to_numeric(df0["invoice_age_days"], errors="coerce").fillna(0).astype("int64")
+
+    # Aging bucket: prefer canonical mapping; if numeric, bucketize; else use DPD
+    if cols.get("aging"):
+        df0["bucket"] = [
+            _normalize_bucket(a, d) for a, d in zip(df0[cols["aging"]], df0["days_past_due"])
+        ]
     else:
-        df["days_past_due"] = (pd.Timestamp(as_of) - df["due_date"]).dt.days
-    df["days_past_due"] = pd.to_numeric(df["days_past_due"], errors="coerce").fillna(0).astype("int64")
+        df0["bucket"] = df0["days_past_due"].map(bucketize)
 
-    # Buckets
-    if cols["aging"]:
-        tmp = df[cols["aging"]].map(lambda x: BUCKET_MAP.get(str(x).strip(), str(x).strip()))
-        needs_compute = tmp.isna() | (tmp.eq(""))
-        df["bucket"] = tmp.where(~needs_compute, df["days_past_due"].map(bucketize))
-    else:
-        df["bucket"] = df["days_past_due"].map(bucketize)
-
-    df["is_overdue"] = df["days_past_due"] > 0
-    df["invoice_age_days"] = (pd.Timestamp(as_of) - df["invoice_date"]).dt.days
-    df["invoice_age_days"] = pd.to_numeric(df["invoice_age_days"], errors="coerce").fillna(0).astype("int64")
-
-    # Ensure text columns never show literal "nan"
+    # Clean text columns
     for c in ["customer", "type", "num", "po", "terms", "bucket"]:
-        df[c] = df.get(c, "").fillna("").astype(str).str.strip()
+        df0[c] = df0.get(c, "").fillna("").astype(str).str.strip()
 
-    # Filter out zero balances / non-rows
-    df = df[(~df["type"].isna()) & (df["amount"].abs() > 0.00001)].copy()
+    # ----- STRICT FILTERS: keep only real invoice/credit lines -----
+    reasons = []
+    keep = pd.Series(True, index=df0.index)
+
+    # 1) non-empty customer
+    mask = df0["customer"].str.len() > 0
+    reasons.append(("blank_customer", ~mask))
+    keep &= mask
+
+    # 2) non-empty type
+    mask = df0["type"].str.len() > 0
+    reasons.append(("blank_type", ~mask))
+    keep &= mask
+
+    # 3) only invoice/credit docs (drop totals/headers/etc.)
+    type_norm = df0["type"].str.lower()
+    mask = type_norm.str.contains(r"(?:invoice|credit)", regex=True, na=False)
+    reasons.append(("non_invoice_or_credit", ~mask))
+    keep &= mask
+
+    # 4) must have some identifying info (num or dates)
+    mask = (df0["num"].str.len() > 0) | df0["invoice_date"].notna() | df0["due_date"].notna()
+    reasons.append(("no_num_and_no_dates", ~mask))
+    keep &= mask
+
+    # 5) non-zero amount
+    mask = df0["amount"].notna() & (df0["amount"].abs() > 1e-6)
+    reasons.append(("zero_or_nan_amount", ~mask))
+    keep &= mask
+
+    dropped = (~keep).sum()
+    if dropped:
+        rej = df0.loc[~keep].copy()
+        # annotate first matching reason (for quick triage)
+        rej["reject_reason"] = ""
+        for name, m in reasons:
+            rej.loc[rej["reject_reason"].eq("") & m.loc[rej.index], "reject_reason"] = name
+        out_root_tmp = Path(f"./Customer_Statements_{as_of.isoformat()}")
+        out_root_tmp.mkdir(parents=True, exist_ok=True)
+        rej.to_csv(out_root_tmp / "_rejected_rows.csv", index=False)
+        print(f"⚠️  Dropped {dropped} non-detail rows. See {out_root_tmp / '_rejected_rows.csv'}")
+
+    df = df0.loc[keep].copy()
+
+    # If nothing left, fail early
+    if df.empty:
+        raise SystemExit("No valid invoice/credit rows after filtering. Check your export format.")
+
+    # Final boolean flags
+    df["is_overdue"] = df["days_past_due"] > 0
 
     # Output root
     out_root = settings.output_root or Path(f"./Customer_Statements_{as_of.isoformat()}")
@@ -169,8 +236,11 @@ def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
         )
 
         rows = []
-        for _, r in cdf.sort_values(["is_overdue", "due_date", "invoice_date", "num"],
-                                    ascending=[False, True, True, True]).iterrows():
+        cdf = cdf.sort_values(
+            ["is_overdue", "due_date", "invoice_date", "num"],
+            ascending=[False, True, True, True]
+        )
+        for _, r in cdf.iterrows():
             rows.append({
                 "type": r["type"],
                 "num": r["num"],
@@ -215,18 +285,16 @@ def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
     engine = excel_engine_or_csv_fallback()
     if engine:
         with pd.ExcelWriter(out_root / "Aging_Summary.xlsx", engine=engine) as writer:
-            # Detail (Raw) — coerce likely numeric/date cols so Excel types are right
-            raw_out = raw.copy()
-            # try to coerce common columns by name
+            # Detail (Raw) — lightly typed for readability in Excel
+            raw_out = raw0.copy()
             for c in raw_out.columns:
                 cl = c.lower()
                 if "days" in cl:
-                    raw_out[c] = pd.to_numeric(raw_out[c], errors="coerce").fillna(0).astype("int64")
+                    raw_out[c] = pd.to_numeric(raw_out[c], errors="coerce")
                 elif "balance" in cl or "amount" in cl or "open" in cl:
                     raw_out[c] = pd.to_numeric(raw_out[c], errors="coerce")
                 elif "date" in cl:
                     raw_out[c] = pd.to_datetime(raw_out[c], errors="coerce")
-
             raw_out.to_excel(writer, index=False, sheet_name="Detail (Raw)")
             if engine == "xlsxwriter":
                 _apply_formats_xlsxwriter(writer, "Detail (Raw)", raw_out)
@@ -237,7 +305,8 @@ def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
             clean_cols = ["customer", "type", "num", "po", "terms", "invoice_date", "due_date", "amount",
                           "days_past_due", "bucket", "is_overdue", "invoice_age_days"]
             clean_out = pd.DataFrame(df, columns=clean_cols).copy()
-            clean_out["days_past_due"] = clean_out["days_past_due"].astype("int64")
+            clean_out["days_past_due"] = pd.to_numeric(clean_out["days_past_due"], errors="coerce").fillna(0).astype(
+                "int64")
             clean_out["invoice_age_days"] = pd.to_numeric(clean_out["invoice_age_days"], errors="coerce").fillna(
                 0).astype("int64")
             clean_out.to_excel(writer, index=False, sheet_name="Detail (Clean)")
@@ -253,7 +322,7 @@ def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
             else:
                 _apply_formats_openpyxl(writer, "By Customer")
     else:
-        raw.to_csv(out_root / "Detail_Raw.csv", index=False)
+        raw0.to_csv(out_root / "Detail_Raw.csv", index=False)
         df[["customer", "type", "num", "po", "terms", "invoice_date", "due_date", "amount", "days_past_due", "bucket",
             "is_overdue", "invoice_age_days"]].to_csv(out_root / "Detail_Clean.csv", index=False)
         summary.to_csv(out_root / "By_Customer.csv", index=False)
@@ -265,10 +334,10 @@ def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
         rows.append({"customer": r["Customer"], "rel_path": rel, "total_due_fmt": fmt_money(r["Total Due"])})
 
     grand_total_raw = round(float(summary["Total Due"].sum()), 2)
-    index_html = t_index.render(
+    index_html = Environment(loader=BaseLoader(), autoescape=select_autoescape()).from_string(INDEX_HTML).render(
         company=company, as_of=as_of.isoformat(),
         rows=rows, grand_total_fmt=fmt_money(grand_total_raw),
-        grand_total=grand_total_raw,  # data attribute for tests
+        grand_total=grand_total_raw,
     )
     (out_root / "index.html").write_text(index_html, encoding="utf-8")
 
