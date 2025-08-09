@@ -8,7 +8,7 @@ NETC AR Statement Builder — persistent output tree (HTML only, no PDFs).
     <Customer>/<slug>_statement_<YYYY-MM-DD>.html
   Overwrite same-day; keep different days.
 - email_template.txt is always the latest only (overwrite)
-- Top-level index.html / send_statements.csv / Aging_Summary.xlsx overwritten each run
+- Top-level index.html overwritten each run
 """
 import os
 import textwrap
@@ -301,52 +301,6 @@ def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
 
     # Sort and write top-level artifacts (overwrite each run)
     summary = pd.DataFrame(summaries).sort_values(["Total Due", "Customer"], ascending=[False, True])
-    summary.to_csv(base_root / "send_statements.csv", index=False)
-
-    engine = excel_engine_or_csv_fallback()
-    if engine:
-        with pd.ExcelWriter(base_root / "Aging_Summary.xlsx", engine=engine) as writer:
-            # Raw
-            raw_out = raw0.copy()
-            for c in raw_out.columns:
-                cl = c.lower()
-                if "days" in cl:
-                    raw_out[c] = pd.to_numeric(raw_out[c], errors="coerce")
-                elif "balance" in cl or "amount" in cl or "open" in cl:
-                    raw_out[c] = pd.to_numeric(raw_out[c], errors="coerce")
-                elif "date" in cl:
-                    raw_out[c] = pd.to_datetime(raw_out[c], errors="coerce")
-            raw_out.to_excel(writer, index=False, sheet_name="Detail (Raw)")
-            if engine == "xlsxwriter":
-                _apply_formats_xlsxwriter(writer, "Detail (Raw)", raw_out)
-            else:
-                _apply_formats_openpyxl(writer, "Detail (Raw)")
-
-            # Clean
-            clean_cols = ["customer", "type", "num", "po", "terms", "invoice_date", "due_date", "amount",
-                          "days_past_due", "bucket", "is_overdue", "invoice_age_days"]
-            clean_out = pd.DataFrame(df, columns=clean_cols).copy()
-            clean_out["days_past_due"] = pd.to_numeric(clean_out["days_past_due"], errors="coerce").fillna(0).astype(
-                "int64")
-            clean_out["invoice_age_days"] = pd.to_numeric(clean_out["invoice_age_days"], errors="coerce").fillna(
-                0).astype("int64")
-            clean_out.to_excel(writer, index=False, sheet_name="Detail (Clean)")
-            if engine == "xlsxwriter":
-                _apply_formats_xlsxwriter(writer, "Detail (Clean)", clean_out)
-            else:
-                _apply_formats_openpyxl(writer, "Detail (Clean)")
-
-            # By Customer (latest)
-            summary.to_excel(writer, index=False, sheet_name="By Customer")
-            if engine == "xlsxwriter":
-                _apply_formats_xlsxwriter(writer, "By Customer", summary)
-            else:
-                _apply_formats_openpyxl(writer, "By Customer")
-    else:
-        raw0.to_csv(base_root / "Detail_Raw.csv", index=False)
-        df[["customer", "type", "num", "po", "terms", "invoice_date", "due_date", "amount", "days_past_due", "bucket",
-            "is_overdue", "invoice_age_days"]].to_csv(base_root / "Detail_Clean.csv", index=False)
-        summary.to_csv(base_root / "By_Customer.csv", index=False)
 
     # Index (links to latest statements we just wrote)
     rows = []

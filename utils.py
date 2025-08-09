@@ -96,7 +96,7 @@ def autodetect_csv(search_dirs: list[Path]) -> str | None:
     cands = []
     for d in search_dirs:
         if not d.exists(): continue
-        cands += [p for p in d.glob("*.csv") if not p.name.lower().startswith(("send_statements", "aging_summary"))]
+        cands += [p for p in d.glob("*.csv")]
     if not cands: return None
     cands.sort(
         key=lambda p: (sum(s in p.name.lower() for s in ["aging", "ar", "receivable", "qb", "ar_detail", "quickbooks"]),
