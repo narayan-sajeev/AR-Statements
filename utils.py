@@ -1,5 +1,5 @@
 """
-Utility helpers kept small and boring on purpose.
+Small helpers: parsing, aliases, bucket calc, file finding, Excel engine choice.
 """
 import re
 import unicodedata
@@ -10,14 +10,12 @@ import pandas as pd
 
 
 def clean_str(x):
-    """Return a trimmed string; blank if NaN/None."""
     if x is None: return ""
     if isinstance(x, float) and pd.isna(x): return ""
     return str(x).strip()
 
 
 def parse_money(x):
-    """Parse money-like strings to float; safe for NaN and commas/dollar signs."""
     if pd.isna(x): return np.nan
     if isinstance(x, (int, float)): return float(x)
     s = str(x).strip().replace(",", "").replace("$", "")
@@ -28,7 +26,6 @@ def parse_money(x):
 
 
 def fmt_money(x):
-    """Consistent USD formatting."""
     try:
         return "${:,.2f}".format(float(x))
     except:
@@ -36,17 +33,16 @@ def fmt_money(x):
 
 
 def slugify(name: str) -> str:
-    """Human-friendly folder/file slugs (no weird underscores)."""
     s = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode()
     s = s.replace("&", " and ")
     s = re.sub(r"[’'`]", "", s)
     s = s.replace("/", "-").replace("\\", "-")
-    s = re.sub(r"[^A-Za-z0-9. -]+", " ", s)  # allow dot/dash/space
+    s = re.sub(r"[^A-Za-z0-9. -]+", " ", s)  # allow dot, dash, space
     s = re.sub(r"\s+", " ", s).strip()
     return s[:120] or "Unknown"
 
 
-# Aliases let us tolerate different header spellings from various QB exports/cleanups
+# Column aliases tolerant of different QB exports
 ALIASES = {
     "name": ["Name", "Customer", "Customer Name", "Customer_Name"],
     "type": ["Type", "Txn Type", "Txn_Type", "Doc Type", "Doc_Type"],
@@ -63,14 +59,12 @@ ALIASES = {
 
 
 def pick(df: pd.DataFrame, keys: list[str]) -> str | None:
-    """Return the first column present from a list of candidate names."""
     for k in keys:
         if k in df.columns: return k
     return None
 
 
 def excel_engine_or_csv_fallback() -> str | None:
-    """Pick an Excel writer engine if available; else fall back to CSV."""
     for cand in ("xlsxwriter", "openpyxl"):
         try:
             __import__(cand)
@@ -81,13 +75,11 @@ def excel_engine_or_csv_fallback() -> str | None:
 
 
 def autodetect_csv(search_dirs: list[Path]) -> str | None:
-    """Find the most likely AR CSV in a set of directories."""
     cands = []
     for d in search_dirs:
         if not d.exists(): continue
         cands += [p for p in d.glob("*.csv") if not p.name.lower().startswith(("send_statements", "aging_summary"))]
     if not cands: return None
-    # score by name hints + mtime
     cands.sort(
         key=lambda p: (sum(s in p.name.lower() for s in ["aging", "ar", "receivable", "qb", "ar_detail", "quickbooks"]),
                        p.stat().st_mtime), reverse=True)
@@ -95,7 +87,6 @@ def autodetect_csv(search_dirs: list[Path]) -> str | None:
 
 
 def bucketize(days: int) -> str:
-    """Compute canonical bucket from integer days past due (<=0 => Current)."""
     if pd.isna(days): return "Current"
     d = int(days)
     if d <= 0: return "Current"

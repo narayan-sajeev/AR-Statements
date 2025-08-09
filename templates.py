@@ -1,4 +1,4 @@
-# templates.py
+# HTML + email templates (Bootstrap 5 via CDN)
 
 INDEX_HTML = """<!doctype html>
 <html>
@@ -24,8 +24,7 @@ INDEX_HTML = """<!doctype html>
   </header>
 
   <div class="mb-3">
-    <input id="q" class="form-control form-control-sm" placeholder="Search customer or amount…"
-           oninput="filt()">
+    <input id="q" class="form-control form-control-sm" placeholder="Search customer or amount…" oninput="filt()">
   </div>
 
   <div class="table-responsive">
@@ -49,7 +48,7 @@ INDEX_HTML = """<!doctype html>
       <tfoot class="table-group-divider">
         <tr>
           <td>Grand Total</td>
-          <td class="text-end fw-semibold">{{ grand_total_fmt }}</td>
+          <td id="grand-total" data-total="{{ grand_total }}" class="text-end fw-semibold">{{ grand_total_fmt }}</td>
           <td></td>
         </tr>
       </tfoot>
@@ -80,7 +79,7 @@ STATEMENT_HTML = """<!doctype html>
 <style>
   body { margin: 24px; }
   .pre { white-space: pre-line; }
-  /* Force colors for overdue/credits even with Bootstrap tables/printing */
+  /* Enforce colors even with Bootstrap/printing */
   .overdue td { color: #b10000 !important; }
   .credit  td { color: #0a6d0a !important; }
   /* Only bold the amount cell on special rows */
