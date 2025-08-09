@@ -24,7 +24,8 @@ INDEX_HTML = """<!doctype html>
       <div>
         <h1 class="h3 mb-1">{{ company.name }} - Customer Statements</h1>
         <div class="text-muted small">
-          {{ company.email }} • {{ company.phone }} • <span class="pre d-inline">{{ company.address }}</span>
+          {{ company.email }} • {{ company.phone }}<br>
+          {{ company.address }}
         </div>
         <span class="badge text-bg-light mt-2">As of {{ as_of }}</span>
       </div>
@@ -104,7 +105,8 @@ STATEMENT_HTML = """<!doctype html>
       <div>
         <h1 class="h3 mb-1">{{ company.name }} - Customer Statements</h1>
         <div class="text-muted small">
-          {{ company.email }} • {{ company.phone }} • <span class="pre d-inline">{{ company.address }}</span>
+          {{ company.email }} • {{ company.phone }}<br>
+          {{ company.address }}
         </div>
         <span class="badge text-bg-light mt-2">As of {{ as_of }}</span>
       </div>
