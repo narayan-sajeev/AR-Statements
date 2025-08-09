@@ -6,6 +6,12 @@ Validate latest NETC AR output.
 - Checks: integer DPD, no literal 'nan' strings, bucket vocabulary, totals
   reconciliation, index grand total, presence of overdue/credit styling.
 """
+
+# !/usr/bin/env python3
+"""
+Validate NETC AR output. Prefers fixed ./Customer_Statements directory;
+falls back to newest dated dir or zip (for backward compatibility).
+"""
 import argparse
 import io
 import re
@@ -16,7 +22,11 @@ from pathlib import Path
 import pandas as pd
 
 
-def find_latest():
+def find_output():
+    base = Path("./Customer_Statements")
+    if base.exists() and base.is_dir():
+        return base, False
+    # legacy fallback
     dirs = [p for p in Path(".").glob("Customer_Statements_*") if p.is_dir()]
     zips = sorted(Path(".").glob("Customer_Statements_*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
     if dirs:
@@ -95,7 +105,7 @@ def main():
             print(f"Output not found: {base}");
             sys.exit(2)
     else:
-        base, is_zip = find_latest()
+        base, is_zip = find_output()
         if base is None:
             print("No outputs found (Customer_Statements_*).");
             sys.exit(2)
