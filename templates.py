@@ -16,11 +16,18 @@ INDEX_HTML = """<!doctype html>
 </head>
 <body class="container-lg">
   <header class="mb-3">
-    <h1 class="h3 mb-1">{{ company.name }} — Customer Statements</h1>
-    <div class="text-muted small">
-      {{ company.email }} • {{ company.phone }} • <span class="pre d-inline">{{ company.address }}</span>
+    <div class="d-flex align-items-center gap-3">
+      {% if company.logo_src %}
+        <img src="{{ company.logo_src }}" alt="{{ company.name }} logo" style="height:48px; width:auto;">
+      {% endif %}
+      <div>
+        <h1 class="h3 mb-1">{{ company.name }} — Customer Statements</h1>
+        <div class="text-muted small">
+          {{ company.email }} • {{ company.phone }} • <span class="pre d-inline">{{ company.address }}</span>
+        </div>
+        <span class="badge text-bg-light mt-2">As of {{ as_of }}</span>
+      </div>
     </div>
-    <span class="badge text-bg-light mt-2">As of {{ as_of }}</span>
   </header>
 
   <div class="mb-3">
@@ -90,7 +97,7 @@ STATEMENT_HTML = """<!doctype html>
 <body class="container-lg">
   <header class="mb-3">
     <div class="d-flex align-items-center gap-3">
-      {% if company.logo_src %}<img src="{{ company.logo_src }}" alt="{{ company.name }}" style="height:48px">{% endif %}
+      {% if company.logo_src %}<img src="{{ company.logo_src }}" alt="{{ company.name }}" style="height:48px; width:auto">{% endif %}
       <div>
         <h1 class="h4 mb-1">{{ company.name }} — Customer Statement</h1>
         <div class="text-muted small">
