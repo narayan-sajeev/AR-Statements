@@ -43,8 +43,7 @@ def fmt_money(x):
         return x
 
 
-def slugify(name: str) -> str:
-    """Prefer python-slugify; fallback to a conservative ASCII sanitizer."""
+def clean_folder_name(name: str) -> str:
     s = str(name or "")
     if _ext_slugify:
         out = _ext_slugify(s, lowercase=False, separator=" ", max_length=120)
@@ -79,16 +78,6 @@ ALIASES = {
 def pick(df: pd.DataFrame, keys: list[str]) -> str | None:
     for k in keys:
         if k in df.columns: return k
-    return None
-
-
-def excel_engine_or_csv_fallback() -> str | None:
-    for cand in ("xlsxwriter", "openpyxl"):
-        try:
-            __import__(cand)
-            return cand
-        except ImportError:
-            pass
     return None
 
 

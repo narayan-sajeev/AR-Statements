@@ -12,19 +12,18 @@ NETC AR Statement Builder — persistent output tree (HTML only, no PDFs).
 """
 import os
 import textwrap
-import zipfile
 from datetime import date
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 from jinja2 import Environment, BaseLoader, select_autoescape
 
+from slugify import slugify
 from config import Company, BUCKET_CANON, BUCKET_MAP
 from templates import INDEX_HTML, STATEMENT_HTML, EMAIL_TXT
 from utils import (
-    ALIASES, pick, clean_str, parse_money, fmt_money, slugify,
-    excel_engine_or_csv_fallback, autodetect_csv, bucketize,
+    ALIASES, pick, clean_str, parse_money, fmt_money,
+    autodetect_csv, bucketize, clean_folder_name
 )
 
 
@@ -223,7 +222,7 @@ def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
     summaries = []
     for cust in sorted(df["customer"].dropna().unique()):
         cdf = df.loc[df["customer"].eq(cust)].copy()
-        cust_dir = base_root / slugify(cust)
+        cust_dir = base_root / clean_folder_name(cust)
         cust_dir.mkdir(parents=True, exist_ok=True)
 
         total_due = float(cdf["amount"].sum())
@@ -272,7 +271,19 @@ def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
             })
 
         # Statement file: keep history by day; overwrite if same day
-        statement_name = f"{slugify(cust)}_statement_{as_of.isoformat()}.html"
+        # Take first 3 words of customer name
+        cust_words = cust.split()[:3]
+        cust_first3 = " ".join(cust_words)
+
+        # Slugify
+        cust_slug = slugify(cust_first3)
+
+        # Format date without dashes
+        date_str = as_of.strftime("%Y%m%d")
+
+        # Build filename without "statement"
+        statement_name = f"{cust_slug}_{date_str}.html"
+
         statement_path = cust_dir / statement_name
 
         html = t_statement.render(
@@ -315,17 +326,6 @@ def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
         grand_total=grand_total_raw,
     )
     (base_root / "index.html").write_text(index_html, encoding="utf-8")
-
-    # Optional: zip (overwrite same name each run to avoid growing artifacts)
-    zip_path = base_root / "Customer_Statements_latest.zip"
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
-        for root, _, files in os.walk(base_root):
-            for f in files:
-                # don't include the zip itself
-                fp = Path(root) / f
-                if fp == zip_path:
-                    continue
-                z.write(fp, arcname=str(fp.relative_to(base_root)))
 
     print(f"✅ Built {len(summaries)} statements into {base_root}")
     print(f"   Open: {(base_root / 'index.html')}")
