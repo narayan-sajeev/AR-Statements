@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-NETC AR Statement Builder — entry point / CLI.
+NETC AR Statement Builder - entry point / CLI.
 """
 import argparse
 from pathlib import Path

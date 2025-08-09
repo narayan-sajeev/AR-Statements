@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-NETC AR Statement Builder — single persistent output tree.
+NETC AR Statement Builder - single persistent output tree.
 
 - Root folder is constant: ./Customer_Statements
 - One subfolder per customer (slug)

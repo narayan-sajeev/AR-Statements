@@ -1,4 +1,4 @@
-# NETC — AR Statement Builder
+# NETC - AR Statement Builder
 
 Generate branded customer statements, a searchable index, and a clean aging workbook from a QuickBooks AR export.
 

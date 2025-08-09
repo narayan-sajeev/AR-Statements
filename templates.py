@@ -1,10 +1,10 @@
-# HTML + email templates (Bootstrap 5 via CDN) — sorting removed
+# HTML + email templates (Bootstrap 5 via CDN) - sorting removed
 
 INDEX_HTML = """<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>{{ company.name }} — Customer Statements — {{ as_of }}</title>
+<title>{{ company.name }} - Customer Statements - {{ as_of }}</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
       integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
 <style>
@@ -22,7 +22,7 @@ INDEX_HTML = """<!doctype html>
         <img src="{{ company.logo_src }}" alt="{{ company.name }} logo" style="height:48px; width:auto;">
       {% endif %}
       <div>
-        <h1 class="h3 mb-1">{{ company.name }} — Customer Statements</h1>
+        <h1 class="h3 mb-1">{{ company.name }} - Customer Statements</h1>
         <div class="text-muted small">
           {{ company.email }} • {{ company.phone }} • <span class="pre d-inline">{{ company.address }}</span>
         </div>
@@ -82,7 +82,7 @@ STATEMENT_HTML = """<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ company.name }} — Statement — {{ customer }}</title>
+<title>{{ company.name }} - Statement - {{ customer }}</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
       integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
 <style>
@@ -102,7 +102,7 @@ STATEMENT_HTML = """<!doctype html>
     <div class="d-flex align-items-center gap-3">
       {% if company.logo_src %}<img src="{{ company.logo_src }}" alt="{{ company.name }} logo" style="height:48px; width:auto;">{% endif %}
       <div>
-        <h1 class="h3 mb-1">{{ company.name }} — Customer Statements</h1>
+        <h1 class="h3 mb-1">{{ company.name }} - Customer Statements</h1>
         <div class="text-muted small">
           {{ company.email }} • {{ company.phone }} • <span class="pre d-inline">{{ company.address }}</span>
         </div>
@@ -194,11 +194,11 @@ STATEMENT_HTML = """<!doctype html>
 </html>
 """
 
-EMAIL_TXT = """Subject: Statement as of {{ as_of }} — {{ customer }} — {{ company.name }}
+EMAIL_TXT = """Subject: Statement as of {{ as_of }} - {{ customer }} - {{ company.name }}
 
 Hi {{ customer }},
 
-Please find your current statement attached/linked. As of {{ as_of }}, your outstanding balance is {{ total_due_fmt }}.
+Please find your current statement attached. As of {{ as_of }}, your outstanding balance is {{ total_due_fmt }}.
 
 Remit to:
 {{ company.remit_to }}
