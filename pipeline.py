@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-NETC AR Statement Builder - single persistent output tree.
+NETC AR Statement Builder — persistent output tree (HTML only, no PDFs).
 
 - Root folder is constant: ./Customer_Statements
 - One subfolder per customer (slug)
@@ -10,20 +10,22 @@ NETC AR Statement Builder - single persistent output tree.
 - email_template.txt is always the latest only (overwrite)
 - Top-level index.html / send_statements.csv / Aging_Summary.xlsx overwritten each run
 """
+import os
+import textwrap
+import zipfile
 from datetime import date
 from pathlib import Path
-import os, zipfile, textwrap
 
 import numpy as np
 import pandas as pd
 from jinja2 import Environment, BaseLoader, select_autoescape
 
-from config import Company, Settings, BUCKET_CANON, BUCKET_MAP
+from config import Company, BUCKET_CANON, BUCKET_MAP
+from templates import INDEX_HTML, STATEMENT_HTML, EMAIL_TXT
 from utils import (
     ALIASES, pick, clean_str, parse_money, fmt_money, slugify,
     excel_engine_or_csv_fallback, autodetect_csv, bucketize,
 )
-from templates import INDEX_HTML, STATEMENT_HTML, EMAIL_TXT
 
 
 # ---------- Excel helpers ----------
@@ -92,6 +94,14 @@ def _normalize_bucket(raw_aging, dpd):
         return "Current"
 
 
+def _avg_int(series: pd.Series) -> int:
+    """Safe integer average; returns 0 for empty/NaN."""
+    if series is None or series.empty:
+        return 0
+    m = pd.to_numeric(series, errors="coerce").mean()
+    return int(m) if pd.notna(m) else 0
+
+
 # ---------- Main build ----------
 def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
               logo_override: str | None = None) -> None:
@@ -99,7 +109,8 @@ def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
     company = Company()
     if logo_override:
         company.logo_src = logo_override
-    # Persistent root: either provided, or fixed folder
+
+    # Persistent root: fixed folder
     base_root = (outdir if outdir else Path("./Customer_Statements")).resolve()
     base_root.mkdir(parents=True, exist_ok=True)
 
@@ -130,15 +141,27 @@ def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
     df0["due_date"] = pd.to_datetime(df0[cols["due_date"]], errors="coerce") if cols["due_date"] else pd.NaT
     df0["amount"] = df0[cols["open_balance"]].map(parse_money).astype(float)
 
-    # DPD & age
-    dpd_supplied = pd.to_numeric(df0[cols["days_past_due"]], errors="coerce") if cols.get(
-        "days_past_due") else pd.Series(index=df0.index, dtype="float64")
+    # --- DPD & Age (compute first, then clamp) ---
+    dpd_supplied = (
+        pd.to_numeric(df0[cols["days_past_due"]], errors="coerce")
+        if cols.get("days_past_due") else pd.Series(index=df0.index, dtype="float64")
+    )
     df0["days_past_due"] = dpd_supplied
     need_dpd = df0["days_past_due"].isna() & df0["due_date"].notna()
     df0.loc[need_dpd, "days_past_due"] = (pd.Timestamp(as_of) - df0.loc[need_dpd, "due_date"]).dt.days
-    df0["days_past_due"] = pd.to_numeric(df0["days_past_due"], errors="coerce").fillna(0).astype("int64")
+
     df0["invoice_age_days"] = (pd.Timestamp(as_of) - df0["invoice_date"]).dt.days
-    df0["invoice_age_days"] = pd.to_numeric(df0["invoice_age_days"], errors="coerce").fillna(0).astype("int64")
+
+    # normalize types and clamp
+    df0["days_past_due"] = pd.to_numeric(df0["days_past_due"], errors="coerce").fillna(0)
+    df0["invoice_age_days"] = pd.to_numeric(df0["invoice_age_days"], errors="coerce").fillna(0)
+    df0["days_past_due"] = df0["days_past_due"].clip(lower=0)
+    df0["invoice_age_days"] = df0["invoice_age_days"].clip(lower=0)
+    # DPD cannot exceed invoice age
+    df0["days_past_due"] = df0[["days_past_due", "invoice_age_days"]].min(axis=1)
+    # final dtypes
+    df0["days_past_due"] = df0["days_past_due"].astype("int64")
+    df0["invoice_age_days"] = df0["invoice_age_days"].astype("int64")
 
     # Buckets
     if cols.get("aging"):
@@ -163,7 +186,6 @@ def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
     keep &= m
 
     type_norm = df0["type"].str.lower()
-    # non-capturing group + na=False to avoid warnings and na matches
     m = type_norm.str.contains(r"(?:invoice|credit)", regex=True, na=False)
     reasons.append(("non_invoice_or_credit", ~m));
     keep &= m
@@ -208,24 +230,28 @@ def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
         bucket_sums = cdf.groupby("bucket")["amount"].sum().reindex(BUCKET_CANON, fill_value=0.0)
         overdue_total = float(cdf.loc[cdf["is_overdue"], "amount"].sum())
 
-        avg_since_inv = int(cdf["invoice_age_days"].dropna().mean() or 0)
-        avg_past_due = int(cdf.loc[cdf["is_overdue"], "days_past_due"].mean()) if cdf["is_overdue"].any() else 0
-        oldest_past_due = int(cdf.loc[cdf["is_overdue"], "days_past_due"].max()) if cdf["is_overdue"].any() else 0
+        # Minimal, collector-focused metrics
+        open_mask = cdf["amount"] > 0
+        over_mask = cdf["is_overdue"] & open_mask
+
+        avg_dpd = _avg_int(cdf.loc[over_mask, "days_past_due"])
+        oldest_past_due = int(cdf.loc[over_mask, "days_past_due"].max()) if over_mask.any() else 0
+
+        overdue_sorted = cdf[cdf["is_overdue"]].sort_values("amount", ascending=False)
+        largest_overdue = (
+            f"{overdue_sorted['num'].iat[0]} ({fmt_money(overdue_sorted['amount'].iat[0])})"
+            if not overdue_sorted.empty else "N/A"
+        )
 
         metrics = {
             "Invoices": int(len(cdf)),
             "Overdue invoices": int(cdf["is_overdue"].sum()),
-            "Average days since invoice": avg_since_inv,
-            "Average days past due": avg_past_due,
+            "Avg days past due": avg_dpd,  # overdue only
             "Oldest days past due": oldest_past_due,
             "Total due": fmt_money(total_due),
             "Overdue total": fmt_money(overdue_total),
+            "Largest overdue invoice": largest_overdue,
         }
-        overdue_sorted = cdf[cdf["is_overdue"]].sort_values("amount", ascending=False)
-        metrics["Largest overdue invoice"] = (
-            f"{overdue_sorted['num'].iat[0]} ({fmt_money(overdue_sorted['amount'].iat[0])})"
-            if not overdue_sorted.empty else "N/A"
-        )
 
         # Rows (sorted: overdue first, then oldest due first)
         rows = []
@@ -343,7 +369,8 @@ def build_all(input_csv: str | None, as_of_str: str | None, outdir: Path | None,
             for f in files:
                 # don't include the zip itself
                 fp = Path(root) / f
-                if fp == zip_path: continue
+                if fp == zip_path:
+                    continue
                 z.write(fp, arcname=str(fp.relative_to(base_root)))
 
     print(f"✅ Built {len(summaries)} statements into {base_root}")
