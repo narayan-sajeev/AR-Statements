@@ -150,6 +150,24 @@ function buildDetailTable(data){
 }
 
 /* ================= Filtering + Aggregation ================= */
+function updateFilterBanner(name){
+  const banner = document.getElementById('filterBanner');
+  const nameEl = document.getElementById('filterName');
+  if (!banner || !nameEl) return;
+  if (name){
+    banner.classList.remove('d-none');
+    nameEl.textContent = name;
+    document.body.classList.add('filtered');
+    try { document.title = name + " — AR Executive Summary"; } catch(e){}
+  } else {
+    banner.classList.add('d-none');
+    nameEl.textContent = "";
+    document.body.classList.remove('filtered');
+    try { document.title = "AR Executive Summary"; } catch(e){}
+  }
+}
+
+
 
 /** Aggregate from detailed rows */
 function aggregateFromDetail(detail){
@@ -235,6 +253,7 @@ function setCustomerFilter(customerName){
   if (!customerName){
     window.ACTIVE_CUSTOMER = null;
     if (badge) { badge.classList.add('d-none'); badge.textContent=''; }
+    updateFilterBanner(null);
     buildAll(window.ORIGINAL_PAYLOAD);
     return;
   }
@@ -257,6 +276,7 @@ function setCustomerFilter(customerName){
     badge.textContent = 'Filter: ' + customerName + '  ×';
     badge.title = 'Click to clear filter';
   }
+  updateFilterBanner(customerName);
   buildAll(payload);
 }
 

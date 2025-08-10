@@ -1,27 +1,183 @@
-body { background: #ffffff; color: #111827; }
-    .card { background: #ffffff; border: 1px solid #e9ecef; border-radius: 1rem; box-shadow: 0 4px 14px rgba(0,0,0,0.06); }
-    .kpi { font-size: 1.8rem; font-weight: 700; }
-    .kpi-sub { font-size: 0.95rem; color: #6c757d; }
-    .muted { color: #6c757d; }
-    .chart-wrap { height: 420px; }
-    .sticky-header { position: sticky; top: 0; z-index: 1000; background: #ffffff; padding: 0.5rem 0; }
-    table.dataTable>thead>tr>th { background: #f8f9fa; color: #212529; }
-    .badge-soft { background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.1); }
+/* ===== Layout & Typography ===== */
+:root{
+  --bg:#ffffff;
+  --fg:#1f2937;
+  --muted:#6b7280;
+  --card:#ffffff;
+  --border:#e5e7eb;
+  --accent:#1E88E5;
+  --soft:#f3f4f6;
+}
+body{ background:var(--bg); color:var(--fg); }
+.container-fluid{ max-width:1400px; }
 
-/* Brand header */
-.brand-logo{height:56px; width:auto; border-radius:8px;}
-.brand-text a{ text-decoration:none; }
+/* Sticky header */
+.sticky-header{ position:sticky; top:0; z-index:1000; background:var(--bg); padding:0.75rem 0.25rem; border-bottom:0 !important; }
+.brand-logo{ height:44px; width:auto; border-radius:6px; }
+.brand-text .h4{ font-weight:700; margin-bottom:.25rem; }
+.brand-text .small a{ color:inherit; text-decoration:none; border-bottom:1px dotted var(--border); }
+#activeFilter{ background:#FFEF9E; color:#5b4a00; border:1px solid #F5D561; padding:.3rem .6rem; }
+
+/* Cards */
+.card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:14px;
+  box-shadow:0 4px 12px rgba(0,0,0,.04);
+}
+.card h5{ margin-bottom:.25rem; font-weight:600; }
+.kpi{ font-size:2rem; font-weight:800; letter-spacing:.2px; }
+.kpi-sub{ color:var(--muted); font-size:.92rem; }
+
+/* Charts */
+.chart-wrap{ height:380px; }
+@media (max-width: 1200px){ .chart-wrap{ height:320px; } }
+@media (max-width: 768px){ .chart-wrap{ height:280px; } }
+
+/* Tables */
+table.dataTable>thead>tr>th{ background:#f8fafc; color:#111827; border-bottom:1px solid var(--border); }
+.table.table-striped>tbody>tr:nth-of-type(odd){ background:#fbfdff; }
+
+/* Badges & helpers */
+.badge-soft{ background:#eef2ff; border:1px solid #e0e7ff; color:#1e3a8a; padding:.3rem .5rem; }
+.chart-subtitle{ color:var(--muted); font-weight:500; }
+
+/* Filter banner (prominent) */
+.filter-banner{
+  display:flex; align-items:center; gap:.5rem;
+  background:#FFF7E6;
+  border:1px solid #FFE3B3;
+  color:#5b4a00;
+  padding:.65rem .9rem;
+  border-radius:12px;
+  font-weight:600;
+}
+.filter-banner strong{ background:#FFE8A3; padding:.15rem .35rem; border-radius:6px; }
+
+/* Filtered Visual Cue (subtle) */
+body.filtered .sticky-header{ border-bottom:0 !important; }
+body.filtered .card{ box-shadow:0 8px 24px rgba(30,136,229,.06); border-color:#dbeafe; }
 
 
-/* Override Bootstrap muted text for light mode readability */
-.text-muted { color: #333 !important; }
+/* ===== Refined Header ===== */
+.sticky-header{ position:sticky; top:0; z-index:1000; background:var(--bg);   border-bottom:0 !important;
+}
+.header-wrap{
+  display:grid;
+  grid-template-columns: 1fr auto;
+  align-items:center;
+  gap:1rem;
+  padding:0.75rem 0.25rem;
+  border-bottom:0 !important;
+  background:var(--bg);
+}
+.brand-title{ font-size:1.35rem; font-weight:800; line-height:1.25; }
+.brand-subtitle{ font-weight:600; color:var(--muted); }
+.brand-meta{ color:var(--muted); margin-top:.15rem; }
+.brand-asof{ margin-top:.1rem; }
+.brand-logo{ height:40px; width:auto; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+.control-upload{ min-width:320px; }
 
-/* Readability fix: ensure badges use dark text on light background */
-.badge-soft {
-  background: #e9ecef !important;
-  border: 1px solid #ced4da !important;
-  color: #212529 !important;
+/* Tag (filter) style */
+.chip{
+  display:inline-flex;
+  align-items:center;
+  gap:.35rem;
+  padding:.35rem .6rem;
+  border-radius:999px;
+  font-weight:700;
+  border:1px solid transparent;
+  white-space:nowrap;
+}
+.chip-amber{
+  background:#FFE8A3;
+  border-color:#F5D561;
+  color:#5b4a00;
+}
+.chip-amber::after{ content:" ×"; font-weight:800; margin-left:.1rem; }
+
+/* Adjust the filter banner spacing since header is tighter now */
+.filter-banner{ margin-top: .5rem; }
+
+
+/* Clean header */
+.sticky-header{ position:sticky; top:0; z-index:1000; background:#fff; border-bottom:0 !important; }
+.header-wrap{ display:grid; grid-template-columns: 1fr auto; align-items:center; gap:1rem; padding:.8rem .25rem;   border-bottom:0 !important;
+}
+.brand-logo{ height:36px; width:auto; border-radius:6px; }
+.brand-title{ font-size:1.25rem; font-weight:800; line-height:1.2; }
+.brand-subtitle{ font-weight:600; color:#6b7280; }
+.brand-asof{ color:#6b7280; font-size:.9rem; margin-top:.15rem; }
+.control-upload{ min-width:300px; }
+.chip{ display:inline-flex; align-items:center; gap:.35rem; padding:.3rem .55rem; border-radius:999px; font-weight:700; border:1px solid #F5D561; background:#FFE8A3; color:#5b4a00; white-space:nowrap; }
+
+
+
+/* Clean compact header */
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: #fff;
+  border-bottom:0 !important;
+}
+.header-wrap {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: .6rem .25rem;
+  gap: .5rem 1rem;
+  border-bottom:0 !important;
+}
+.brand-logo {
+  height: 42px;
+  width: auto;
+  border-radius: 6px;
+}
+.brand-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.brand-subtitle {
+  font-weight: 600;
+  color: #6b7280;
+}
+.brand-asof {
+  color: #6b7280;
+  font-size: .9rem;
+}
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+.header-left div {
+  display: flex;
+  flex-direction: column;
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
 }
 
-/* Active filter badge */
-#activeFilter { cursor: pointer; }
+/* Header compact pass */
+.sticky-header{ border-bottom:0 !important; }
+.header-wrap{ padding:.6rem .25rem; gap:.75rem;   border-bottom:0 !important;
+}
+.brand-logo{ height:42px; }
+.brand-title{ font-size:1.28rem; }
+.brand-asof{ margin-top:.1rem; }
+.control-upload{ min-width:280px; }
+
+
+/* Header refinements */
+.sticky-header { border-bottom:0 !important; }
+.header-wrap { padding:.5rem .25rem; gap:.75rem;   border-bottom:0 !important;
+}
+.brand-logo { height:42px; }
+.brand-title { font-size:1.28rem; }
+.brand-asof { margin-top:.05rem; font-size:.9rem; }
+#filterBanner { margin-top:.25rem; }

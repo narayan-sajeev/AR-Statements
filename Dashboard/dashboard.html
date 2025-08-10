@@ -12,24 +12,31 @@
 </head>
 <body>
   <div class="container-fluid py-4">
-    <div class="d-flex align-items-center justify-content-between sticky-header">
-      
-<div class="d-flex align-items-center brand-header">
-  <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRwHR6UBXCrejLzK29Th-EPysfj2vX2ZIaRsg&s"
-       alt="Company Logo" class="brand-logo me-3">
-  <div class="brand-text">
-    <div class="h4 mb-1">New England Truck Center — Accounts Receivable</div>
-    <div class="small text-muted">156 Epping Rd, Exeter, NH 03833 • <a href="mailto:netcar@netruckcenter.com">netcar@netruckcenter.com</a> • (603) 778-8158</div>
-    <div class="small text-muted">As of <span id="asOf">—</span></div>
+
+<div class="sticky-header">
+  <div class="header-wrap container-fluid px-0">
+    <div class="d-flex align-items-center gap-3">
+      <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRwHR6UBXCrejLzK29Th-EPysfj2vX2ZIaRsg&s" alt="Company Logo" class="brand-logo">
+      <div>
+        <div class="brand-title"><span class="brand-name">New England Truck Center</span> — <span class="brand-subtitle">Accounts Receivable</span></div>
+        <div class="brand-asof">As of <span id="asOf">—</span></div>
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <span id="activeFilter" class="chip chip-amber d-none"></span>
+      <input type="file" id="fileInput" accept=".csv" class="form-control control-upload"/>
+    </div>
   </div>
 </div>
 
-      <div class="d-flex align-items-center gap-2"><span id="activeFilter" class="badge rounded-pill text-bg-warning d-none"></span>
-        <input type="file" id="fileInput" accept=".csv" class="form-control" />
-      </div>
+<div id="filterBanner" class="filter-banner d-none mt-3">
+      <span class="me-2">Viewing data for:</span> <strong id="filterName"></strong>
+      <span class="ms-2 small text-muted">(click any bar again or the yellow tag to clear)</span>
     </div>
 
-    <!-- KPIs -->
+
+      
+<!-- KPIs -->
     <div class="row g-3 mt-1">
       <div class="col-md-3"><div class="card p-3"><div class="muted">Total A/R</div><div class="kpi" id="kpiTotal">—</div><div class="kpi-sub">Sum of all open invoice balances</div></div></div>
       <div class="col-md-3"><div class="card p-3"><div class="muted">Current</div><div class="kpi" id="kpiCurrent">—</div><div class="kpi-sub">Not yet due</div></div></div>
@@ -72,7 +79,7 @@
             <h5 class="mb-1">Overdue Risk — Largest Exposures</h5>
             <span class="badge badge-soft" id="badgeOverdue"></span>
           </div>
-          <div class="muted mb-2">Sorted by overdue amount, then max days past due.</div>
+          <div class="muted mb-2">Sorted by overdue amount.</div>
           <div class="chart-wrap"><canvas id="riskBar"></canvas></div>
         </div>
       </div>
