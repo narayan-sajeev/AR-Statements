@@ -1,0 +1,24 @@
+body { background: #ffffff; color: #111827; }
+    .card { background: #ffffff; border: 1px solid #e9ecef; border-radius: 1rem; box-shadow: 0 4px 14px rgba(0,0,0,0.06); }
+    .kpi { font-size: 1.8rem; font-weight: 700; }
+    .kpi-sub { font-size: 0.95rem; color: #6c757d; }
+    .muted { color: #6c757d; }
+    .chart-wrap { height: 420px; }
+    .sticky-header { position: sticky; top: 0; z-index: 1000; background: #ffffff; padding: 0.5rem 0; }
+    table.dataTable>thead>tr>th { background: #f8f9fa; color: #212529; }
+    .badge-soft { background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.1); }
+
+/* Brand header */
+.brand-logo{height:56px; width:auto; border-radius:8px;}
+.brand-text a{ text-decoration:none; }
+
+
+/* Override Bootstrap muted text for light mode readability */
+.text-muted { color: #333 !important; }
+
+/* Readability fix: ensure badges use dark text on light background */
+.badge-soft {
+  background: #e9ecef !important;
+  border: 1px solid #ced4da !important;
+  color: #212529 !important;
+}
