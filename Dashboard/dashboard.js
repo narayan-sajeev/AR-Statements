@@ -252,7 +252,7 @@ function setCustomerFilter(customerName){
 
   if (!customerName){
     window.ACTIVE_CUSTOMER = null;
-    if (badge) { badge.classList.add('d-none'); badge.textContent=''; }
+    if (badge) { badge.classList.add('d-none'); badge.textContent = ''; }
     updateFilterBanner(null);
     buildAll(window.ORIGINAL_PAYLOAD);
     return;
@@ -271,11 +271,7 @@ function setCustomerFilter(customerName){
   payload.cust_bucket = charts.cust_bucket;
   payload.risk_top = charts.risk_top;
 
-  if (badge){
-    badge.classList.remove('d-none');
-    badge.textContent = 'Filter: ' + customerName + '  ×';
-    badge.title = 'Click to clear filter';
-  }
+  if (badge) { badge.classList.remove('d-none'); badge.textContent = 'Filter: ' + customerName + ' ×'; badge.title = 'Click to clear filter'; }
   updateFilterBanner(customerName);
   buildAll(payload);
 }

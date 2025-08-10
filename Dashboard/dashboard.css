@@ -94,7 +94,7 @@ body.filtered .card{ box-shadow:0 8px 24px rgba(30,136,229,.06); border-color:#d
   border-color:#F5D561;
   color:#5b4a00;
 }
-.chip-amber::after{ content:" ×"; font-weight:800; margin-left:.1rem; }
+
 
 /* Adjust the filter banner spacing since header is tighter now */
 .filter-banner{ margin-top: .5rem; }
