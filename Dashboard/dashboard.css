@@ -22,3 +22,6 @@ body { background: #ffffff; color: #111827; }
   border: 1px solid #ced4da !important;
   color: #212529 !important;
 }
+
+/* Active filter badge */
+#activeFilter { cursor: pointer; }
