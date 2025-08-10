@@ -188,11 +188,12 @@ function aggregateFromDetail(detail){
     const c = r.Customer || r['Customer']; if (!c) continue;
     if (!riskMap.has(c)) riskMap.set(c, { customer:c, overdue_amount:0, max_days_past_due:0, invoices:0 });
     const o = riskMap.get(c);
-    o.overdue_amount += Number(r['Open Balance']||0);
+    o.overdue_amount += Number(r['Open Balance']||0); // credits reduce overdue
     o.max_days_past_due = Math.max(o.max_days_past_due, Number(r['Days Past Due']||0));
     o.invoices += 1;
   }
-  const risk = Array.from(riskMap.values()).sort((a,b)=> b.overdue_amount - a.overdue_amount).slice(0,15);
+  const risk = Array.from(riskMap.values()).map(r => ({...r, overdue_amount: Math.max(r.overdue_amount, 0)}))
+                    .sort((a,b)=> b.overdue_amount - a.overdue_amount).slice(0,15);
 
   return {
     as_of,
@@ -208,7 +209,8 @@ function aggregateFromDetail(detail){
 function buildInvoiceChartsForCustomer(detail){
   const aging = ['Current','1–30','31–60','61–90','91–120','120+'];
   const invoices = detail.map((r, idx)=>{
-    const label = r['Invoice Number'] || r['Date'] || ('Inv ' + (idx+1));
+    const base = r['Invoice Number'] || r['Date'] || ('Txn ' + (idx+1));
+    const label = (r['Type']==='Credit Memo' ? 'CM ' : '') + base;
     return { label, amount: Number(r['Open Balance']||0), bucket: r['Aging Bucket']||'Current', days: Number(r['Days Past Due']||0) };
   });
   invoices.sort((a,b)=> b.amount - a.amount);
@@ -312,6 +314,7 @@ function toPayloadFromCSV(rows){
   const c_num      = find('num','no','invoice_number','doc_num','txn_no');
   const c_bal      = find('open balance','open_balance','open amount','openamount','open_amt','amount due','amount_due','balance','amount','amt');
   const c_memo     = find('memo','description','memo/description','memo_description');
+  const c_typelabel = c_type;
 
   function toNum(x){ const n = Number(String(x||'').replace(/[^0-9\.-]/g,'')); return isFinite(n)?n:0; }
   function parseDate(s){ const d = new Date(s); return isNaN(d) ? null : d; }
@@ -321,7 +324,8 @@ function toPayloadFromCSV(rows){
     const t = String(r[c_type] || '').toLowerCase();
     if (!t) return false;
     if (['payment','deposit','journal','total','subtotal','refund'].includes(t)) return false;
-    return t.includes('inv') || t === 'invoice';
+    // Keep invoices and credit memos
+    return t.includes('inv') || t === 'invoice' || t.includes('credit');
   }).filter(r => String(r[c_customer]||'').trim().length > 0);
 
   const detail = rowsFiltered.map(r => {
@@ -330,6 +334,7 @@ function toPayloadFromCSV(rows){
     const bucket = days <= 0 ? 'Current' : days<=30 ? '1–30' : days<=60 ? '31–60' : days<=90 ? '61–90' : days<=120 ? '91–120' : '120+';
     const rec = {
       Customer: r[c_customer],
+      Type: (String(r[c_type]||'').toLowerCase().includes('credit') ? 'Credit Memo' : 'Invoice'),
       'Open Balance': toNum(r[c_bal]),
       'Days Past Due': days,
       'Aging Bucket': bucket
