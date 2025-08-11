@@ -6,9 +6,12 @@ window.CURRENT_PAYLOAD = null;
 window.ORIGINAL_PAYLOAD = null;
 window.ACTIVE_CUSTOMER = null;
 
+/* ---- Canonical aging buckets + consistent colors (NEW) ---- */
+window.AR_BUCKETS = ['Current', '1–30', '31–60', '61–90', '91–120', '120+'];
+window.AR_BUCKET_COLORS = Object.fromEntries(window.AR_BUCKETS.map((b, i) => [b, window.AR_PALETTE[i % window.AR_PALETTE.length]]));
+
 /* ---- Utils ---- */
 const moneyFmt = new Intl.NumberFormat(undefined, {style: 'currency', currency: 'USD', maximumFractionDigits: 2});
-const dateFmt = (s) => s;
 
 function money(x) {
     return moneyFmt.format(Number(x || 0));
@@ -63,11 +66,11 @@ function buildBalancesBar(ctx, bucketData, mode) {
         });
     }
 
-    // Stacked by aging bucket — hide buckets that are all zero so the legend only shows present buckets
+    // Stacked by aging bucket — consistent colors per bucket
     const datasetsRaw = bucketData.buckets.map((bkt, idx) => ({
         label: bkt,
         data: (bucketData.data[bkt] || []).map(v => Number(v || 0)),
-        backgroundColor: window.AR_PALETTE[idx % window.AR_PALETTE.length],
+        backgroundColor: window.AR_BUCKET_COLORS[bkt] || window.AR_PALETTE[idx % window.AR_PALETTE.length],
         borderWidth: 0
     }));
 
@@ -97,7 +100,7 @@ function buildBalancesBar(ctx, bucketData, mode) {
     });
 }
 
-/** Aging pie — hide zero-amount buckets so they don't appear in slices or legend */
+/** Aging pie — hide zero-amount buckets and keep consistent colors */
 function buildPie(ctx, agingSummary) {
     const labels = agingSummary.map(r => r.bucket);
     const data = agingSummary.map(r => Number(r.amount || 0));
@@ -107,10 +110,10 @@ function buildPie(ctx, agingSummary) {
     const flabels = pairs.map(p => p.l);
     const fdata = pairs.map(p => p.v);
 
+    const colors = flabels.map(l => window.AR_BUCKET_COLORS[l] || window.AR_PALETTE[0]);
+
     return new Chart(ctx, {
-        type: 'pie',
-        data: {labels: flabels, datasets: [{data: fdata, backgroundColor: window.AR_PALETTE.slice(0, flabels.length)}]},
-        options: {
+        type: 'pie', data: {labels: flabels, datasets: [{data: fdata, backgroundColor: colors}]}, options: {
             responsive: true, maintainAspectRatio: false, plugins: {
                 legend: {position: 'bottom'}, tooltip: {callbacks: {label: (i) => `${i.label}: ${money(i.parsed)}`}}
             }
@@ -211,7 +214,7 @@ function updateFilterBanner(name) {
 /** Aggregate from detailed rows */
 function aggregateFromDetail(detail) {
     const as_of = new Date().toISOString().slice(0, 10);
-    const aging = ['Current', '1–30', '31–60', '61–90', '91–120', '120+'];
+    const aging = window.AR_BUCKETS.slice(); // CONSISTENT
 
     const total_ar = detail.reduce((a, r) => a + Number(r['Open Balance'] || 0), 0);
     const current_total = detail.filter(r => r['Aging Bucket'] === 'Current')
@@ -268,7 +271,7 @@ function aggregateFromDetail(detail) {
 
 /** Build per-invoice charts when a company is active */
 function buildInvoiceChartsForCustomer(detail) {
-    const aging = ['Current', '1–30', '31–60', '61–90', '91–120', '120+'];
+    const aging = window.AR_BUCKETS.slice(); // CONSISTENT
 
     // Build normalized invoice list
     const invoices = detail.map((r, idx) => {
