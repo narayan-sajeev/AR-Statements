@@ -6,10 +6,28 @@ window.AR_OVERDUE_COLOR = '#FF7043';
 window.CURRENT_PAYLOAD = null;
 window.ORIGINAL_PAYLOAD = null;
 window.ACTIVE_CUSTOMER = null;
+window.ACTIVE_BUCKET = null; // active aging-bucket filter (mutually exclusive with customer)
 
-/* ---- Canonical aging buckets + consistent colors (NEW) ---- */
+/* ---- Canonical aging buckets + consistent colors ---- */
 window.AR_BUCKETS = ['Current', '1–30', '31–60', '61–90', '91–120', '120+'];
 window.AR_BUCKET_COLORS = Object.fromEntries(window.AR_BUCKETS.map((b, i) => [b, window.AR_PALETTE[i % window.AR_PALETTE.length]]));
+
+/* ---- Label helpers: readable, no em dashes/hyphens for filter banner ---- */
+function formatBucketLabel(b) {
+    if (b === 'Current') return 'Current (not due)';
+    if (b === '1–30') return '1-30 days overdue';
+    if (b === '31–60') return '31-60 days overdue';
+    if (b === '61–90') return '61-90 days overdue';
+    if (b === '91–120') return '91-120 days overdue';
+    if (b === '120+') return '120+ days overdue';
+    return b;
+}
+
+function filterBannerText() {
+    if (window.ACTIVE_CUSTOMER) return `Customer: ${window.ACTIVE_CUSTOMER}`;
+    if (window.ACTIVE_BUCKET) return `Bucket: ${formatBucketLabel(window.ACTIVE_BUCKET)}`;
+    return null;
+}
 
 /* ---- Utils ---- */
 const moneyFmt = new Intl.NumberFormat(undefined, {style: 'currency', currency: 'USD', maximumFractionDigits: 2});
@@ -46,19 +64,27 @@ function buildBalancesBar(ctx, bucketData, mode) {
                     label: 'Total Balance', data: totals, backgroundColor: window.AR_PALETTE[0], borderWidth: 0
                 }]
             }, options: {
-                responsive: true, maintainAspectRatio: false, plugins: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
                     legend: {display: false}, tooltip: {
                         callbacks: {
                             title: (it) => items[it[0].dataIndex], label: (it) => `Total: ${money(it.parsed.y)}`
                         }
                     }
-                }, scales: {
-                    x: {ticks: {display: false}}, y: {ticks: {callback: v => money(v)}}
-                }, onClick: (evt, elems) => {
+                },
+                scales: {x: {ticks: {display: false}}, y: {ticks: {callback: v => money(v)}}},
+                onClick: (evt, elems) => {
                     if (!elems || !elems.length) return;
-                    const name = items[elems[0].index];
+                    // If we're already in invoice mode (customer filter active), a bar click should CLEAR filters,
+                    // not try to treat an invoice label like a customer.
                     if (window.ACTIVE_CUSTOMER) {
-                        setCustomerFilter(null);
+                        clearAllFilters();
+                        return;
+                    }
+                    const name = items[elems[0].index];
+                    if (window.ACTIVE_CUSTOMER === name) {
+                        clearAllFilters();
                     } else {
                         setCustomerFilter(name);
                     }
@@ -74,25 +100,30 @@ function buildBalancesBar(ctx, bucketData, mode) {
         backgroundColor: window.AR_BUCKET_COLORS[bkt] || window.AR_PALETTE[idx % window.AR_PALETTE.length],
         borderWidth: 0
     }));
-
     const datasets = filterZeroBucketsForStacked(datasetsRaw);
 
     return new Chart(ctx, {
         type: 'bar', data: {labels, datasets}, options: {
-            responsive: true, maintainAspectRatio: false, plugins: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
                 legend: {position: 'bottom'}, tooltip: {
                     callbacks: {
                         title: (it) => items[it[0].dataIndex],
                         label: (it) => `${it.dataset.label}: ${money(it.parsed.y)}`
                     }
                 }
-            }, scales: {
-                x: {ticks: {display: false}, stacked: true}, y: {ticks: {callback: v => money(v)}, stacked: true}
-            }, onClick: (evt, elems) => {
+            },
+            scales: {x: {ticks: {display: false}, stacked: true}, y: {ticks: {callback: v => money(v)}, stacked: true}},
+            onClick: (evt, elems) => {
                 if (!elems || !elems.length) return;
+                if (window.ACTIVE_CUSTOMER) { // invoice mode
+                    clearAllFilters();
+                    return;
+                }
                 const name = items[elems[0].index];
-                if (window.ACTIVE_CUSTOMER) {
-                    setCustomerFilter(null);
+                if (window.ACTIVE_CUSTOMER === name) {
+                    clearAllFilters();
                 } else {
                     setCustomerFilter(name);
                 }
@@ -101,7 +132,7 @@ function buildBalancesBar(ctx, bucketData, mode) {
     });
 }
 
-/** Aging pie — hide zero-amount buckets and keep consistent colors */
+/** Aging pie — hide zero-amount buckets and keep consistent colors; clicking a slice applies ONLY the bucket filter */
 function buildPie(ctx, agingSummary) {
     const labels = agingSummary.map(r => r.bucket);
     const data = agingSummary.map(r => Number(r.amount || 0));
@@ -117,6 +148,16 @@ function buildPie(ctx, agingSummary) {
         type: 'pie', data: {labels: flabels, datasets: [{data: fdata, backgroundColor: colors}]}, options: {
             responsive: true, maintainAspectRatio: false, plugins: {
                 legend: {position: 'bottom'}, tooltip: {callbacks: {label: (i) => `${i.label}: ${money(i.parsed)}`}}
+            }, onClick: (evt, elems) => {
+                if (!elems || !elems.length) return;
+                const sliceIndex = elems[0].index;
+                const bucket = flabels[sliceIndex];
+                // Always set ONLY bucket filter (clears customer filter)
+                if (window.ACTIVE_BUCKET === bucket && !window.ACTIVE_CUSTOMER) {
+                    clearAllFilters();
+                } else {
+                    setBucketFilter(bucket);
+                }
             }
         }
     });
@@ -144,9 +185,13 @@ function buildRiskBar(ctx, riskTop) {
             scales: {x: {ticks: {callback: v => money(v)}}},
             onClick: (evt, elems) => {
                 if (!elems || !elems.length) return;
+                if (window.ACTIVE_CUSTOMER) { // invoice mode
+                    clearAllFilters();
+                    return;
+                }
                 const name = labels[elems[0].index];
-                if (window.ACTIVE_CUSTOMER) {
-                    setCustomerFilter(null);
+                if (window.ACTIVE_CUSTOMER === name) {
+                    clearAllFilters();
                 } else {
                     setCustomerFilter(name);
                 }
@@ -195,16 +240,17 @@ function buildDetailTable(data) {
 }
 
 /* ================= Filtering + Aggregation ================= */
-function updateFilterBanner(name) {
+function updateFilterBanner() {
     const banner = document.getElementById('filterBanner');
     const nameEl = document.getElementById('filterName');
     if (!banner || !nameEl) return;
-    if (name) {
+    const label = filterBannerText();
+    if (label) {
         banner.classList.remove('d-none');
-        nameEl.textContent = name;
+        nameEl.textContent = label;
         document.body.classList.add('filtered');
         try {
-            document.title = name + " — AR Executive Summary";
+            document.title = label + " — AR Executive Summary";
         } catch (e) {
         }
     } else {
@@ -218,6 +264,19 @@ function updateFilterBanner(name) {
     }
 }
 
+/** Clear all filters and rebuild from original payload */
+function clearAllFilters() {
+    window.ACTIVE_CUSTOMER = null;
+    window.ACTIVE_BUCKET = null;
+    const badge = document.getElementById('activeFilter');
+    if (badge) {
+        badge.classList.add('d-none');
+        badge.textContent = '';
+        badge.title = '';
+    }
+    updateFilterBanner();
+    if (window.ORIGINAL_PAYLOAD) buildAll(window.ORIGINAL_PAYLOAD);
+}
 
 /** Aggregate from detailed rows */
 function aggregateFromDetail(detail) {
@@ -279,7 +338,7 @@ function aggregateFromDetail(detail) {
 
 /** Build per-invoice charts when a company is active */
 function buildInvoiceChartsForCustomer(detail) {
-    const aging = window.AR_BUCKETS.slice(); // CONSISTENT
+    const aging = window.AR_BUCKETS.slice();
 
     // Build normalized invoice list
     const invoices = detail.map((r, idx) => {
@@ -305,67 +364,97 @@ function buildInvoiceChartsForCustomer(detail) {
         .filter(inv => inv.bucket !== 'Current')
         .sort((a, b) => b.amount - a.amount)
         .slice(0, 15)
-        .map(inv => ({
-            customer: inv.label, overdue_amount: inv.amount, max_days_past_due: inv.days, invoices: 1
-        }));
+        .map(inv => ({customer: inv.label, overdue_amount: inv.amount, max_days_past_due: inv.days, invoices: 1}));
 
-    return {
-        cust_bucket: {customers: items, buckets: aging, data}, risk_top: top15Overdue
-    };
+    return {cust_bucket: {customers: items, buckets: aging, data}, risk_top: top15Overdue};
 }
 
-
-/** Apply/clear customer filter */
+/** Apply ONLY customer filter (clears bucket) */
 function setCustomerFilter(customerName) {
-    const badge = document.getElementById('activeFilter');
     if (!window.ORIGINAL_PAYLOAD) window.ORIGINAL_PAYLOAD = window.CURRENT_PAYLOAD;
 
+    // Always clear bucket when setting a customer filter (mutually exclusive)
+    window.ACTIVE_BUCKET = null;
+
     if (!customerName) {
-        window.ACTIVE_CUSTOMER = null;
-        if (badge) {
-            badge.classList.add('d-none');
-            badge.textContent = '';
-        }
-        updateFilterBanner(null);
-        buildAll(window.ORIGINAL_PAYLOAD);
+        clearAllFilters();
         return;
     }
-
-    // toggle off if same
+    // If same customer is active, toggling off
     if (window.ACTIVE_CUSTOMER === customerName) {
-        setCustomerFilter(null);
+        clearAllFilters();
         return;
     }
 
     window.ACTIVE_CUSTOMER = customerName;
-    const filtered = window.ORIGINAL_PAYLOAD.invoice_detail.filter(r => (r.Customer || '') === customerName);
-    const payload = aggregateFromDetail(filtered);
-    const charts = buildInvoiceChartsForCustomer(filtered);
+
+    // Start from ORIGINAL rows, filter to customer only
+    let rows = window.ORIGINAL_PAYLOAD.invoice_detail.filter(r => (r.Customer || '') === customerName);
+
+    const payload = aggregateFromDetail(rows);
+    const charts = buildInvoiceChartsForCustomer(rows);
     payload.cust_bucket = charts.cust_bucket;
     payload.risk_top = charts.risk_top;
 
+    const badge = document.getElementById('activeFilter');
     if (badge) {
         badge.classList.remove('d-none');
-        badge.textContent = 'Filter: ' + customerName + ' ×';
+        badge.textContent = `Filter: ${customerName} ×`; // readable
         badge.title = 'Click to clear filter';
     }
-    updateFilterBanner(customerName);
+    updateFilterBanner();
+    buildAll(payload);
+}
+
+/** Apply ONLY Aging Bucket filter (clears customer) */
+function setBucketFilter(bucketName) {
+    if (!window.ORIGINAL_PAYLOAD) window.ORIGINAL_PAYLOAD = window.CURRENT_PAYLOAD;
+
+    // Always clear customer when setting a bucket filter (mutually exclusive)
+    window.ACTIVE_CUSTOMER = null;
+
+    if (!bucketName) {
+        clearAllFilters();
+        return;
+    }
+    // If same bucket is active, toggling off
+    if (window.ACTIVE_BUCKET === bucketName) {
+        clearAllFilters();
+        return;
+    }
+
+    window.ACTIVE_BUCKET = bucketName;
+
+    const rows = window.ORIGINAL_PAYLOAD.invoice_detail
+        .filter(r => (r['Aging Bucket'] || '') === bucketName);
+
+    const payload = aggregateFromDetail(rows);
+
+    const badge = document.getElementById('activeFilter');
+    if (badge) {
+        badge.classList.remove('d-none');
+        badge.textContent = `Filter: ${formatBucketLabel(bucketName)} ×`;
+        badge.title = 'Click to clear filter';
+    }
+    updateFilterBanner();
     buildAll(payload);
 }
 
 /* Clear filter via badge click */
 document.addEventListener('click', (e) => {
-    if (e.target && e.target.id === 'activeFilter') setCustomerFilter(null);
+    if (e.target && e.target.id === 'activeFilter') clearAllFilters();
 });
 
 function updateBadges(payload) {
-    const noun = window.ACTIVE_CUSTOMER ? 'invoices' : 'customers';
+    // If either a customer or a bucket filter is active, we are effectively showing invoices
+    const noun = (window.ACTIVE_CUSTOMER || window.ACTIVE_BUCKET) ? 'invoices' : 'customers';
 
     // --- Overdue Risk badge ---
     const shownOverdueTotal = (payload.risk_top || [])
         .reduce((a, r) => a + Number(r.overdue_amount || 0), 0);
     const shownCount = (payload.risk_top || []).length;
-    document.getElementById('badgeOverdue').textContent = `${shownCount} ${noun}, ${money(shownOverdueTotal)}`;
+    const overdueBadge = document.getElementById('badgeOverdue');
+    if (overdueBadge) overdueBadge.textContent = `${shownCount} ${noun}, ${money(shownOverdueTotal)}`;
 
     // --- Balances badge ---
     const el = document.getElementById('badgeBalances');
@@ -380,23 +469,29 @@ function updateBadges(payload) {
     }
 }
 
-
 /* ================= Main build ================= */
 function buildAll(payload) {
     if (!window.ORIGINAL_PAYLOAD) window.ORIGINAL_PAYLOAD = payload;
     window.CURRENT_PAYLOAD = payload;
 
-    document.getElementById('asOf').textContent = payload.as_of;
-    document.getElementById('kpiTotal').textContent = money(payload.totals.total_ar);
-    document.getElementById('kpiCurrent').textContent = money(payload.totals.current_total);
-    document.getElementById('kpiOverdue').textContent = money(payload.totals.overdue_total);
-    document.getElementById('kpiOver90').textContent = money(payload.totals.over_90);
-    document.getElementById('badgeOverdue').textContent = `${payload.totals.customers_overdue} customers, ${money(payload.totals.overdue_total)}`;
+    const asOfEl = document.getElementById('asOf');
+    if (asOfEl) asOfEl.textContent = payload.as_of;
 
+    const kpiTotal = document.getElementById('kpiTotal');
+    const kpiCurrent = document.getElementById('kpiCurrent');
+    const kpiOverdue = document.getElementById('kpiOverdue');
+    const kpiOver90 = document.getElementById('kpiOver90');
+    if (kpiTotal) kpiTotal.textContent = money(payload.totals.total_ar);
+    if (kpiCurrent) kpiCurrent.textContent = money(payload.totals.current_total);
+    if (kpiOverdue) kpiOverdue.textContent = money(payload.totals.overdue_total);
+    if (kpiOver90) kpiOver90.textContent = money(payload.totals.over_90);
+
+    // Set initial overdue badge from shown data (not global totals)
     const shownOverdueTotal = (payload.risk_top || [])
         .reduce((a, r) => a + Number(r.overdue_amount || 0), 0);
     const shownCount = (payload.risk_top || []).length;
-    document.getElementById('badgeOverdue').textContent = `${shownCount} customers, ${money(shownOverdueTotal)}`;
+    const overdueBadge = document.getElementById('badgeOverdue');
+    if (overdueBadge) overdueBadge.textContent = `${shownCount} customers, ${money(shownOverdueTotal)}`;
 
     updateBadges(payload);
 
@@ -411,6 +506,9 @@ function buildAll(payload) {
 
     fillAgingTable(document.getElementById('agingTable'), payload.aging_summary, payload.totals.total_ar);
     buildDetailTable(payload.invoice_detail);
+
+    // Refresh banner with current state
+    updateFilterBanner();
 
     // Bind/rebind totals toggle
     const el = document.getElementById('toggleTotals');
