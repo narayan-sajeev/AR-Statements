@@ -104,8 +104,9 @@ const ARUI = (() => {
     }
 
     function updateBadges(payload) {
-        // If either a customer or a bucket filter is active, we’re effectively showing invoices in charts/badges
-        const noun = (window.ACTIVE_CUSTOMER || window.ACTIVE_BUCKET) ? 'invoices' : 'customers';
+        // Say "invoices" only when a company bar was clicked and we're filtered by customer.
+        // Default view or bucket (pie) filter should say "customers".
+        const noun = window.ACTIVE_CUSTOMER ? 'invoices' : 'customers';
 
         // Overdue Risk badge reflects shown bars (not global totals)
         const shownOverdueTotal = ARU.sumObjProp(payload.risk_top || [], 'overdue_amount');
@@ -123,6 +124,7 @@ const ARUI = (() => {
             el.textContent = `${items.length} ${noun}, ${ARU.money(ARU.sum(totals))}`;
         }
     }
+
 
     /** Show/hide and wire the "Totals only" toggle (default view only) */
     function syncTotalsToggle(onChangeRebuild) {
