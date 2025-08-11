@@ -131,27 +131,33 @@ const ARUI = (() => {
         const toggleEl = document.getElementById('toggleTotals');
         if (!toggleEl) return {visible: false, mode: 'stacked'};
 
-        const toggleWrap = toggleEl.closest('.form-check');
+        // prefer a stable wrapper id, but fall back to closest .form-check
+        const toggleWrap = document.getElementById('totalsToggleWrap') || toggleEl.closest('.form-check');
+
+        const hasData = !!window.CURRENT_PAYLOAD;
         const defaultView = ARU.isDefaultView();
-        if (toggleWrap) toggleWrap.style.display = defaultView ? '' : 'none';
 
-        // Reflect saved user choice in default view; ignore otherwise
-        toggleEl.checked = defaultView ? !!window.DEFAULT_TOTALS_ONLY : false;
+        // SHOW only when: data is loaded AND we’re in the default (unfiltered) view
+        if (toggleWrap) toggleWrap.style.display = (hasData && defaultView) ? '' : 'none';
 
-        // Mode logic:
-        // - Default view: use user’s toggle choice
-        // - Filtered view: always stacked
-        const mode = defaultView ? (toggleEl.checked ? 'totals' : 'stacked') : 'stacked';
+        // Reflect saved choice only when visible; otherwise unchecked
+        toggleEl.checked = (hasData && defaultView) ? !!window.DEFAULT_TOTALS_ONLY : false;
 
-        // Bind/rebind totals toggle — only acts in default view
+        // Mode:
+        //  - visible (default view + data): use user choice
+        //  - otherwise: stacked
+        const mode = (hasData && defaultView && toggleEl.checked) ? 'totals' : 'stacked';
+
+        // Rebind change handler (no-ops when not in default view)
         toggleEl.onchange = () => {
-            if (!ARU.isDefaultView()) return; // ignore outside default view
+            if (!(!!window.CURRENT_PAYLOAD && ARU.isDefaultView())) return;
             window.DEFAULT_TOTALS_ONLY = toggleEl.checked;
             onChangeRebuild(toggleEl.checked ? 'totals' : 'stacked');
         };
 
-        return {visible: defaultView, mode};
+        return {visible: (hasData && defaultView), mode};
     }
+
 
     return {
         updateFilterBanner, updateBadges, syncTotalsToggle,
