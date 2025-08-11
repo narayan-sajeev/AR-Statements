@@ -8,6 +8,9 @@ window.ORIGINAL_PAYLOAD = null;
 window.ACTIVE_CUSTOMER = null;
 window.ACTIVE_BUCKET = null; // active aging-bucket filter (mutually exclusive with customer)
 
+// Default-view-only user preference for totals mode
+window.DEFAULT_TOTALS_ONLY = false;
+
 /* ---- Canonical aging buckets + consistent colors ---- */
 window.AR_BUCKETS = ['Current', '1–30', '31–60', '61–90', '91–120', '120+'];
 window.AR_BUCKET_COLORS = Object.fromEntries(window.AR_BUCKETS.map((b, i) => [b, window.AR_PALETTE[i % window.AR_PALETTE.length]]));
@@ -27,6 +30,10 @@ function filterBannerText() {
     if (window.ACTIVE_CUSTOMER) return `Customer: ${window.ACTIVE_CUSTOMER}`;
     if (window.ACTIVE_BUCKET) return `Bucket: ${formatBucketLabel(window.ACTIVE_BUCKET)}`;
     return null;
+}
+
+function isDefaultView() {
+    return !window.ACTIVE_CUSTOMER && !window.ACTIVE_BUCKET;
 }
 
 /* ---- Utils ---- */
@@ -499,7 +506,23 @@ function buildAll(payload) {
     if (window._pie) window._pie.destroy();
     if (window._risk) window._risk.destroy();
 
-    const mode = (document.getElementById('toggleTotals') && document.getElementById('toggleTotals').checked) ? 'totals' : 'stacked';
+    const toggleEl = document.getElementById('toggleTotals');
+    const toggleWrap = toggleEl ? toggleEl.closest('.form-check') : null;
+    const defaultView = isDefaultView();
+
+    // Show toggle ONLY in default view; hide when filtered
+    if (toggleWrap) toggleWrap.style.display = defaultView ? '' : 'none';
+
+    // Reflect user's saved choice when in default; otherwise ignore/clear
+    if (toggleEl) {
+        toggleEl.checked = defaultView ? !!window.DEFAULT_TOTALS_ONLY : false;
+    }
+
+    // Mode logic:
+    // - Default view: use user's toggle choice
+    // - Filtered view: always stacked
+    const mode = defaultView ? (toggleEl && toggleEl.checked ? 'totals' : 'stacked') : 'stacked';
+
     window._stacked = buildBalancesBar(document.getElementById('stackedBar'), payload.cust_bucket, mode);
     window._pie = buildPie(document.getElementById('agingPie'), payload.aging_summary);
     window._risk = buildRiskBar(document.getElementById('riskBar'), payload.risk_top);
@@ -510,12 +533,13 @@ function buildAll(payload) {
     // Refresh banner with current state
     updateFilterBanner();
 
-    // Bind/rebind totals toggle
-    const el = document.getElementById('toggleTotals');
-    if (el) {
-        el.onchange = () => {
+    // Bind/rebind totals toggle — only acts in default view
+    if (toggleEl) {
+        toggleEl.onchange = () => {
+            if (!isDefaultView()) return;               // ignore outside default view
+            window.DEFAULT_TOTALS_ONLY = toggleEl.checked;
             if (window._stacked) window._stacked.destroy();
-            const newMode = el.checked ? 'totals' : 'stacked';
+            const newMode = toggleEl.checked ? 'totals' : 'stacked';
             window._stacked = buildBalancesBar(document.getElementById('stackedBar'), window.CURRENT_PAYLOAD.cust_bucket, newMode);
         };
     }
