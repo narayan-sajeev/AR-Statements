@@ -2,6 +2,7 @@
 
 /* ---- Global State ---- */
 window.AR_PALETTE = ['#1E88E5', '#43A047', '#FB8C00', '#E53935', '#8E24AA', '#00ACC1']; // vivid, opaque
+window.AR_OVERDUE_COLOR = '#FF7043';
 window.CURRENT_PAYLOAD = null;
 window.ORIGINAL_PAYLOAD = null;
 window.ACTIVE_CUSTOMER = null;
@@ -127,7 +128,14 @@ function buildRiskBar(ctx, riskTop) {
     const data = riskTop.map(r => Number(r.overdue_amount || 0));
     return new Chart(ctx, {
         type: 'bar', data: {
-            labels, datasets: [{label: 'Overdue Amount', data, borderWidth: 0, backgroundColor: window.AR_PALETTE[0]}]
+            labels, datasets: [{
+                label: 'Overdue Amount',
+                data,
+                borderWidth: 0,
+                backgroundColor: window.AR_OVERDUE_COLOR,
+                hoverBackgroundColor: window.AR_OVERDUE_COLOR,
+                borderColor: window.AR_OVERDUE_COLOR,
+            }]
         }, options: {
             indexAxis: 'y',
             responsive: true,
