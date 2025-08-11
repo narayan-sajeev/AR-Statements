@@ -322,6 +322,25 @@ document.addEventListener('click', (e) => {
     if (e.target && e.target.id === 'activeFilter') setCustomerFilter(null);
 });
 
+function updateBalancesBadge(payload) {
+    const el = document.getElementById('badgeBalances');
+    if (!el || !payload || !payload.cust_bucket) return;
+
+    const items = payload.cust_bucket.customers || [];
+    const buckets = payload.cust_bucket.buckets || [];
+    const dataMap = payload.cust_bucket.data || {};
+
+    // total for each shown item (sum across buckets)
+    const totalsPerItem = items.map((_, idx) => buckets.reduce((sum, b) => sum + Number((dataMap[b] || [])[idx] || 0), 0));
+
+    const count = items.length;
+    const total = totalsPerItem.reduce((a, b) => a + b, 0);
+
+    const noun = window.ACTIVE_CUSTOMER ? 'invoices' : 'customers';
+    el.textContent = `${count} ${noun}, ${money(total)}`;
+}
+
+
 /* ================= Main build ================= */
 function buildAll(payload) {
     if (!window.ORIGINAL_PAYLOAD) window.ORIGINAL_PAYLOAD = payload;
@@ -338,6 +357,8 @@ function buildAll(payload) {
         .reduce((a, r) => a + Number(r.overdue_amount || 0), 0);
     const shownCount = (payload.risk_top || []).length;
     document.getElementById('badgeOverdue').textContent = `${shownCount} customers, ${money(shownOverdueTotal)}`;
+
+    updateBalancesBadge(payload);
 
     if (window._stacked) window._stacked.destroy();
     if (window._pie) window._pie.destroy();
