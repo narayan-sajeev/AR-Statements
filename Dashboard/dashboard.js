@@ -302,17 +302,41 @@ const ARCHART = (() => {
  * ========================================================================== */
 const ARTABLE = (() => {
     function fillAgingTable(tbl, agingSummary, total) {
-        const tbody = tbl?.querySelector('tbody');
-        if (!tbody) return;
+        if (!tbl) return;
+
+        // Ensure table has a THEAD with headers
+        let thead = tbl.querySelector('thead');
+        if (!thead) {
+            thead = document.createElement('thead');
+            tbl.prepend(thead);
+        }
+        thead.innerHTML = `
+        <tr>
+            <th>Bucket</th>
+            <th class="text-end">Amount</th>
+            <th class="text-end">% of Total</th>
+        </tr>
+    `;
+
+        // Fill the table body
+        const tbody = tbl.querySelector('tbody') || document.createElement('tbody');
         tbody.innerHTML = '';
         (agingSummary || []).forEach(r => {
             const amt = Number(r.amount || 0);
-            const tr = document.createElement('tr');
             const pc = total ? (amt / total) : 0;
-            tr.innerHTML = `<td>${r.bucket}</td><td class="text-end">${ARU.money(amt)}</td><td class="text-end">${(pc * 100).toFixed(1)}%</td>`;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+            <td>${r.bucket}</td>
+            <td class="text-end">${ARU.money(amt)}</td>
+            <td class="text-end">${(pc * 100).toFixed(1)}%</td>
+        `;
             tbody.appendChild(tr);
         });
+
+        // Ensure tbody is in the table
+        if (!tbl.querySelector('tbody')) tbl.appendChild(tbody);
     }
+
 
     /** Invoice detail table w/ default sort on Open Balance desc */
     function buildDetailTable(data) {
