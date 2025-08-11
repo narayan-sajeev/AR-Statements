@@ -255,6 +255,8 @@ function aggregateFromDetail(detail) {
 /** Build per-invoice charts when a company is active */
 function buildInvoiceChartsForCustomer(detail) {
     const aging = ['Current', '1–30', '31–60', '61–90', '91–120', '120+'];
+
+    // Build normalized invoice list
     const invoices = detail.map((r, idx) => {
         const base = r['Invoice Number'] || r['Date'] || ('Txn ' + (idx + 1));
         const label = (r['Type'] === 'Credit Memo' ? 'CM ' : '') + base;
@@ -265,19 +267,28 @@ function buildInvoiceChartsForCustomer(detail) {
             days: Number(r['Days Past Due'] || 0)
         };
     });
-    invoices.sort((a, b) => b.amount - a.amount);
-    const top = invoices.slice(0, 30);
-    const customers = top.map(x => x.label);
+
+    // Top Balance: 20 largest invoices by open amount (any bucket)
+    const top20ByAmount = [...invoices].sort((a, b) => b.amount - a.amount).slice(0, 20);
+    const items = top20ByAmount.map(x => x.label);
+
     const data = {};
-    for (const b of aging) data[b] = top.map(inv => inv.bucket === b ? inv.amount : 0);
+    for (const b of aging) data[b] = top20ByAmount.map(inv => (inv.bucket === b ? inv.amount : 0));
 
-    // risk: overdue invoices only
-    const risk = top.filter(inv => inv.bucket !== 'Current')
-        .map(inv => ({customer: inv.label, overdue_amount: inv.amount, max_days_past_due: inv.days, invoices: 1}))
-        .sort((a, b) => b.overdue_amount - a.overdue_amount);
+    // Overdue Risk: top 15 overdue invoices by amount
+    const top15Overdue = invoices
+        .filter(inv => inv.bucket !== 'Current')
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 15)
+        .map(inv => ({
+            customer: inv.label, overdue_amount: inv.amount, max_days_past_due: inv.days, invoices: 1
+        }));
 
-    return {cust_bucket: {customers, buckets: aging, data}, risk_top: risk};
+    return {
+        cust_bucket: {customers: items, buckets: aging, data}, risk_top: top15Overdue
+    };
 }
+
 
 /** Apply/clear customer filter */
 function setCustomerFilter(customerName) {
