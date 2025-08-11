@@ -394,3 +394,14 @@ body.filtered .card {
 #filterBanner {
     margin-top: .25rem;
 }
+
+
+/* === Subtle card hover (only change kept) === */
+.card {
+    transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, .08);
+}
