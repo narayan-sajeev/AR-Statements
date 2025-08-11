@@ -334,6 +334,11 @@ function buildAll(payload) {
     document.getElementById('kpiOver90').textContent = money(payload.totals.over_90);
     document.getElementById('badgeOverdue').textContent = `${payload.totals.customers_overdue} customers, ${money(payload.totals.overdue_total)}`;
 
+    const shownOverdueTotal = (payload.risk_top || [])
+        .reduce((a, r) => a + Number(r.overdue_amount || 0), 0);
+    const shownCount = (payload.risk_top || []).length;
+    document.getElementById('badgeOverdue').textContent = `${shownCount} customers, ${money(shownOverdueTotal)}`;
+
     if (window._stacked) window._stacked.destroy();
     if (window._pie) window._pie.destroy();
     if (window._risk) window._risk.destroy();
@@ -375,7 +380,6 @@ function toPayloadFromCSV(rows) {
     const c_num = find('num', 'no', 'invoice_number', 'doc_num', 'txn_no');
     const c_bal = find('open balance', 'open_balance', 'open amount', 'openamount', 'open_amt', 'amount due', 'amount_due', 'balance', 'amount', 'amt');
     const c_memo = find('memo', 'description', 'memo/description', 'memo_description');
-    const c_typelabel = c_type;
 
     function toNum(x) {
         const n = Number(String(x || '').replace(/[^0-9\.-]/g, ''));
