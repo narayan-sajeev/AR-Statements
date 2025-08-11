@@ -323,28 +323,25 @@ document.addEventListener('click', (e) => {
 });
 
 function updateBadges(payload) {
-  const noun = window.ACTIVE_CUSTOMER ? 'invoices' : 'customers';
+    const noun = window.ACTIVE_CUSTOMER ? 'invoices' : 'customers';
 
-  // --- Overdue Risk badge ---
-  const shownOverdueTotal = (payload.risk_top || [])
-    .reduce((a, r) => a + Number(r.overdue_amount || 0), 0);
-  const shownCount = (payload.risk_top || []).length;
-  document.getElementById('badgeOverdue').textContent =
-    `${shownCount} ${noun}, ${money(shownOverdueTotal)}`;
+    // --- Overdue Risk badge ---
+    const shownOverdueTotal = (payload.risk_top || [])
+        .reduce((a, r) => a + Number(r.overdue_amount || 0), 0);
+    const shownCount = (payload.risk_top || []).length;
+    document.getElementById('badgeOverdue').textContent = `${shownCount} ${noun}, ${money(shownOverdueTotal)}`;
 
-  // --- Balances badge ---
-  const el = document.getElementById('badgeBalances');
-  if (el && payload.cust_bucket) {
-    const items   = payload.cust_bucket.customers || [];
-    const buckets = payload.cust_bucket.buckets   || [];
-    const dataMap = payload.cust_bucket.data      || {};
+    // --- Balances badge ---
+    const el = document.getElementById('badgeBalances');
+    if (el && payload.cust_bucket) {
+        const items = payload.cust_bucket.customers || [];
+        const buckets = payload.cust_bucket.buckets || [];
+        const dataMap = payload.cust_bucket.data || {};
 
-    const totalsPerItem = items.map((_, idx) =>
-      buckets.reduce((sum, b) => sum + Number((dataMap[b] || [])[idx] || 0), 0)
-    );
-    const total = totalsPerItem.reduce((a, b) => a + b, 0);
-    el.textContent = `${items.length} ${noun}, ${money(total)}`;
-  }
+        const totalsPerItem = items.map((_, idx) => buckets.reduce((sum, b) => sum + Number((dataMap[b] || [])[idx] || 0), 0));
+        const total = totalsPerItem.reduce((a, b) => a + b, 0);
+        el.textContent = `${items.length} ${noun}, ${money(total)}`;
+    }
 }
 
 
