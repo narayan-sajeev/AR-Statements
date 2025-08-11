@@ -14,6 +14,12 @@ function money(x) {
     return moneyFmt.format(Number(x || 0));
 }
 
+/* ---- Helper: keep only buckets with any non-zero values ---- */
+function filterZeroBucketsForStacked(datasets) {
+    const filtered = (datasets || []).filter(ds => (ds.data || []).some(v => Number(v) > 0));
+    return filtered.length ? filtered : datasets; // fallback if all zero
+}
+
 /* ================= Builders ================= */
 
 /** Balances chart
@@ -57,13 +63,15 @@ function buildBalancesBar(ctx, bucketData, mode) {
         });
     }
 
-    // Stacked by aging bucket
-    const datasets = bucketData.buckets.map((bkt, idx) => ({
+    // Stacked by aging bucket — hide buckets that are all zero so the legend only shows present buckets
+    const datasetsRaw = bucketData.buckets.map((bkt, idx) => ({
         label: bkt,
         data: (bucketData.data[bkt] || []).map(v => Number(v || 0)),
         backgroundColor: window.AR_PALETTE[idx % window.AR_PALETTE.length],
         borderWidth: 0
     }));
+
+    const datasets = filterZeroBucketsForStacked(datasetsRaw);
 
     return new Chart(ctx, {
         type: 'bar', data: {labels, datasets}, options: {
@@ -89,13 +97,19 @@ function buildBalancesBar(ctx, bucketData, mode) {
     });
 }
 
-/** Aging pie */
+/** Aging pie — hide zero-amount buckets so they don't appear in slices or legend */
 function buildPie(ctx, agingSummary) {
     const labels = agingSummary.map(r => r.bucket);
     const data = agingSummary.map(r => Number(r.amount || 0));
+
+    // remove zero buckets
+    const pairs = labels.map((l, i) => ({l, v: data[i]})).filter(p => p.v > 0);
+    const flabels = pairs.map(p => p.l);
+    const fdata = pairs.map(p => p.v);
+
     return new Chart(ctx, {
         type: 'pie',
-        data: {labels, datasets: [{data, backgroundColor: window.AR_PALETTE.slice(0, labels.length)}]},
+        data: {labels: flabels, datasets: [{data: fdata, backgroundColor: window.AR_PALETTE.slice(0, flabels.length)}]},
         options: {
             responsive: true, maintainAspectRatio: false, plugins: {
                 legend: {position: 'bottom'}, tooltip: {callbacks: {label: (i) => `${i.label}: ${money(i.parsed)}`}}
