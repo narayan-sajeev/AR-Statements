@@ -30,27 +30,32 @@ from utils import (
 
 # ---------- Helpers moved out of the giant script ----------
 def _normalize_bucket(raw_aging, dpd):
-    """Return canonical bucket label.
-    - If raw_aging is a known label, map it.
-    - If raw_aging looks numeric (e.g., '72'), map by bucketize.
-    - Else compute from DPD.
+    """Return canonical bucket label, preferring computed DPD over any raw label.
+    Logic:
+      1) If dpd is a valid number, compute dpd_bucket via bucketize(dpd) and return it.
+         (This avoids mismatches like raw '91-120' while dpd=123, which should be '120+'.)
+      2) Else, try to interpret the raw_aging value:
+         - If it's already one of our canonical labels or maps via BUCKET_MAP, return the mapped label.
+         - If it's numeric-like (e.g., '72'), bucketize that number.
+      3) Fallback to 'Current'.
     """
+    # Step 1: Trust computed days-past-due when available
+    try:
+        if pd.notna(dpd):
+            return bucketize(int(float(dpd)))
+    except Exception:
+        pass
+
+    # Step 2: Use the raw 'aging' value if sensible
     s = clean_str(raw_aging)
-    # direct label
     if s in BUCKET_CANON or s in BUCKET_MAP:
         lab = BUCKET_MAP.get(s, s)
         if lab in BUCKET_CANON:
             return lab
-    # numeric-like?
     try:
         return bucketize(int(float(s)))
     except Exception:
-        pass
-    # fallback to DPD
-    try:
-        return bucketize(int(dpd))
-    except Exception:
-        return "Current"
+        return BUCKET_CANON[0]
 
 
 def _avg_int(series: pd.Series) -> int:
