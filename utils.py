@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 from slugify import slugify
 
+from config import AGING_BUCKETS, BUCKET_CANON
+
 _re_space = re.compile(r"\s+")
 _re_bad = re.compile(r"[^A-Za-z0-9. -]+")
 _re_quotes = re.compile(r"[’'`]")
@@ -79,11 +81,14 @@ def autodetect_csv(search_dirs: list[Path]) -> str | None:
 
 
 def bucketize(days: int) -> str:
-    if pd.isna(days): return "Current"
+    if pd.isna(days):
+        return BUCKET_CANON[0]  # "Current"
     d = int(days)
-    if d <= 0: return "Current"
-    if d <= 30: return "1-30"
-    if d <= 60: return "31-60"
-    if d <= 90: return "61-90"
-    if d <= 120: return "91-120"
-    return "120+"
+    if d <= 0:
+        return BUCKET_CANON[0]
+    # Skip the first ("Current") since we've already handled <=0
+    for label, upper in AGING_BUCKETS[1:]:
+        if upper is None or d <= upper:
+            return label
+    # Fallback (shouldn't be hit, but safe):
+    return BUCKET_CANON[-1]

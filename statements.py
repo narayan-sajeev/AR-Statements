@@ -239,6 +239,7 @@ def build_all() -> None:
             company=company, as_of=as_of.isoformat(),
             customer=cust, metrics=metrics, rows=rows,
             total_due_fmt=fmt_money(total_due),
+            buckets=BUCKET_CANON,
             bucket_totals={b: fmt_money(bucket_sums[b]) for b in BUCKET_CANON},
         )
         statement_path.write_text(html, encoding="utf-8")

@@ -5,6 +5,27 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+# ---- Aging buckets: single source of truth ----
+# Each tuple = (label, upper_bound_days). Use None for open-ended final bucket.
+AGING_BUCKETS = [
+    ("Current", 0),
+    ("1-30", 30),
+    ("31-60", 60),
+    ("61-90", 90),
+    ("91-120", 120),
+    ("120+", None),
+]
+BUCKET_CANON = [label for label, _ in AGING_BUCKETS]
+
+# Normalizations into canonical labels
+BUCKET_MAP = {
+    "Over 120": "120+",
+    ">120": "120+",
+    "0-30": "1-30",
+    "0 – 30": "1-30",
+    "0–30": "1-30",
+}
+
 
 @dataclass
 class Company:
@@ -28,8 +49,3 @@ class Company:
 class Settings:
     as_of: date = date.today()
     output_root: Path | None = None
-
-
-# Canonical aging labels & normalizations
-BUCKET_CANON = ["Current", "1-30", "31-60", "61-90", "91-120", "120+"]
-BUCKET_MAP = {"Over 120": "120+", ">120": "120+", "0-30": "1-30", "0 – 30": "1-30", "0–30": "1-30"}
