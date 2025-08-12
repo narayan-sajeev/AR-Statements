@@ -17,15 +17,6 @@ AGING_BUCKETS = [
 ]
 BUCKET_CANON = [label for label, _ in AGING_BUCKETS]
 
-# Normalizations into canonical labels
-BUCKET_MAP = {
-    "Over 120": "120+",
-    ">120": "120+",
-    "0-30": "1-30",
-    "0 – 30": "1-30",
-    "0–30": "1-30",
-}
-
 
 @dataclass
 class Company:
