@@ -85,4 +85,5 @@ def bucketize(days: int) -> str:
     if d <= 30: return "1-30"
     if d <= 60: return "31-60"
     if d <= 90: return "61-90"
-    return "90+"
+    if d <= 120: return "91-120"
+    return "120+"

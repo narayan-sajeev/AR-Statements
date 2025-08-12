@@ -31,5 +31,5 @@ class Settings:
 
 
 # Canonical aging labels & normalizations
-BUCKET_CANON = ["Current", "1-30", "31-60", "61-90", "90+"]
-BUCKET_MAP = {"Over 90": "90+", ">90": "90+", "0-30": "1-30", "0 – 30": "1-30", "0–30": "1-30"}
+BUCKET_CANON = ["Current", "1-30", "31-60", "61-90", "91-120", "120+"]
+BUCKET_MAP = {"Over 120": "120+", ">120": "120+", "0-30": "1-30", "0 – 30": "1-30", "0–30": "1-30"}

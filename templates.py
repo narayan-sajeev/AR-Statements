@@ -178,7 +178,7 @@ STATEMENT_HTML = """<!doctype html>
         <table class="table table-sm align-middle">
           <thead><tr><th>Bucket</th><th class="text-end">Amount</th></tr></thead>
           <tbody>
-            {% for b in ["Current","1-30","31-60","61-90","90+"] %}
+            {% for b in ["Current","1-30","31-60","61-90","91-120", "120+"] %}
               <tr><td>{{ b }}</td><td class="text-end">{{ bucket_totals[b] }}</td></tr>
             {% endfor %}
           </tbody>
