@@ -338,10 +338,12 @@ const ARTABLE = (() => {
     }
 
 
-    /** Invoice detail table w/ default sort on Open Balance desc */
+    /** Invoice detail table w/ default sort on Open Balance desc and $ formatting */
     function buildDetailTable(data) {
         if (window._detail) $('#detailTable').DataTable().destroy();
         $('#detailTable').empty();
+
+        // Collect all keys as columns and backfill missing cells
         const cols = Array.from((data || []).reduce((set, r) => {
             Object.keys(r).forEach(k => set.add(k));
             return set;
@@ -349,16 +351,32 @@ const ARTABLE = (() => {
         (data || []).forEach(r => cols.forEach(c => {
             if (!(c in r)) r[c] = '';
         }));
+
         const obIdx = cols.indexOf('Open Balance');
+
+        // Build column definitions; format Open Balance as $ for display
+        const columnDefs = cols.map(k => {
+            if (k === 'Open Balance') {
+                return {
+                    title: k,
+                    data: k,
+                    className: 'text-end',
+                    render: (val, type) => (type === 'display' ? ARU.money(val) : Number(val || 0))
+                };
+            }
+            return {title: k, data: k};
+        });
+
         window._detail = $('#detailTable').DataTable({
             data: data || [],
             destroy: true,
             responsive: true,
             pageLength: 25,
             order: obIdx >= 0 ? [[obIdx, 'desc']] : [],
-            columns: cols.map(k => ({title: k, data: k}))
+            columns: columnDefs
         });
     }
+
 
     return {fillAgingTable, buildDetailTable};
 })();
