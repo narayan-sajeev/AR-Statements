@@ -1,64 +1,77 @@
-# NETC - AR Statement Builder
+# Accounts Receivable (AR) Statements
 
-Generate branded customer statements, a searchable index, and a clean aging workbook from a QuickBooks AR export.
+This repository contains tools for automating and visualizing **Accounts Receivable (AR) management** at **New England Truck Center**. It combines two components that both operate on the same QuickBooks export (`qb_ar_aging_detail_<DATE>.csv`):
 
-## What it does
+1. **Customer Statement Generator** (Python scripts)  
+   - Automates creation of customer statements from AR data.  
+   - Outputs ready-to-send PDF or email templates.  
 
-* Builds **per-customer statements** (Bootstrap 5) with clear collections metrics.
-* Creates a **searchable index.html** with totals.
-* Exports **Aging\_Summary.xlsx** with:
+2. **AR Executive Dashboard** (HTML/CSS/JS)  
+   - An interactive, browser-based dashboard for real-time AR insights.  
+   - Provides KPIs, visualizations, and invoice drill-downs.  
 
-    * **Detail (Raw)** – your original export, typed (dates, currency, integer days).
-    * **Detail (Clean)** – normalized columns for analysis.
-    * **By Customer** – totals by customer and bucket.
-* Normalizes aging buckets to **Current, 1-30, 31-60, 61-90, 90+** and renders **overdue rows in red** (amount bold),
-  credits in green.
+Both tools are kept in this folder because they exclusively depend on the **QuickBooks AR Aging Detail export** (`qb_ar_aging_detail_<DATE>.csv`) as their data source.
 
-## Install
+---
 
+## 📂 Project Structure
+
+```
+
+ar_statements/
+├── qb_ar_aging_detail_<DATE>.csv     # QuickBooks AR Aging Detail export
+│
+├── statements.py                     # Main script for generating customer statements
+├── config.py                         # Configuration (paths, email templates, formatting)
+├── utils.py                          # Helper functions (date parsing, balances, etc.)
+│
+├── dashboard.html                    # Main AR Executive Dashboard interface
+├── dashboard.css                     # Styling for dashboard UI
+├── dashboard.js                      # Dashboard interactivity & data processing
+
+````
+
+---
+
+## ⚙️ Customer Statement Generator (Python)
+
+- **Input:** `qb_ar_aging_detail_<DATE>.csv` (QuickBooks export)  
+- **Output:** Customer statements (PDF or HTML templates for email).  
+- **Key Features:**  
+  - Generates individualized statements by customer.  
+  - Summarizes open invoices, overdue balances, and totals.  
+  - Configurable branding and message templates (`config.py`).  
+
+### Running the Generator
 ```bash
-pip install pandas numpy jinja2 XlsxWriter openpyxl
-```
+python statements.py
+````
 
-> Any modern Python works. If you have multiple Pythons, run with the one that has the packages.
+Place the latest QuickBooks export (`qb_ar_aging_detail_<DATE>.csv`) in the folder before running.
 
-## Run
+---
 
-```bash
-python run_statements.py
-# or:
-# python run_statements.py --input /path/to/ar.csv --as-of 2025-08-08 --outdir ./Statements_2025-08-08 --logo /path/to/logo.png
-```
+## 📊 AR Executive Dashboard (HTML/JS/CSS)
 
-If `--input` is omitted, the tool auto-detects the newest `*.csv` in `.` / `./input` / `~/Downloads`.
+* **Input:** `qb_ar_aging_detail_<DATE>.csv` uploaded via dashboard.
+* **Output:** Interactive dashboard in browser.
+* **Key Features:**
 
-## Output
+  * **KPIs:** Total AR, Current, Overdue, 90+ Days
+  * **Charts:** Balances by aging bucket, overall distribution, largest overdue exposures
+  * **Tables:** Aging summary and detailed invoice breakdown
+  * **Filtering:** Search and filter by customer or bucket.
 
-```
-Customer_Statements_<DATE>/
-  index.html
-  send_statements.csv
-  Aging_Summary.xlsx
-  <Customer>/  # one folder per customer
-    <Customer>_statement_<DATE>.html
-    email_template.txt
-```
+### Running the Dashboard
 
-## Configure branding
+1. Open `dashboard.html` in a browser.
+2. Upload the most recent `qb_ar_aging_detail_<DATE>.csv`.
+3. Explore KPIs, charts, and invoice details interactively.
 
-Edit **config.py**:
+---
 
-* `name`, `address`, `email`, `phone`
-* optional `logo_src` and `pay_now_url`
+## 🚀 Future Enhancements
 
-(Brand details are used in both statements and email drafts. Keep private info out of the repo.)
-
-## CSV expectations
-
-Flexible headers are supported (aliases included). If your export differs, update `ALIASES` in **utils.py**. If Days
-Past Due / Aging Bucket aren’t present, the tool computes them.
-
-## Notes
-
-* Overdue styling is enforced and **Days Past Due are integers** everywhere.
-* Bootstrap is loaded via CDN; offline use still works (unstyled).
+* Automate email sending with SMTP integration.
+* Add multi-period trend analysis to dashboard.
+* Extend CSV parsing to handle custom QB export formats.
